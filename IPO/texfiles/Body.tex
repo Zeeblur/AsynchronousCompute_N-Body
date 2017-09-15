@@ -1,0 +1,59 @@
+\section{Overview of Project Content and Milestones}
+
+%A summary of the project identifying the most important stages that have to be completed in order for the project to be successful.   Key Terms: To visualise, to develop, to research, to create, etc. 
+%Milestones are scheduled events, or “flags” indicating that some task or set of tasks has been completed. 
+
+
+The project entitled "High Performance Graphics" aims to analyse the effect of asynchronous compute shaders on game performance and to research and develop any optimisations within software which would improve the quality of async compute. 
+
+
+This project aims to evaluate the trade offs between performance increase and ease of implementation of the optimisations needed to improve the capability of asynchronous compute shaders.
+
+Milestones: Rendering engine in vulkan
+Render something Complex - fluid with compute shaders
+
+record performance increase
+optimise code by job scheduling to see if performance gain improves.
+
+\section{The Main Deliverable}
+%The most important elements and achievement of the project when it is completed. 
+The main deliverable will be a real-time rendered scene using asynchronous compute. Possibly a list of optimisation techniques - evaluation on the ease of them - how much code will be effected etc.
+
+\section{Target Audience for the Deliverables}
+%Name the particular type of users, organisation, other researchers, people working the field, etc., -- not just “users.”
+The target audience will include other researchers in the area of Computer Graphics.
+It could also be useful for game studios, independent or other, as a list of optimisation techniques. People interested in graphics card performance and architecture.
+
+\section{The Work to be Undertaken}
+%Terms: Investigation, data collection, specification, design, building, implementation, conducting (surveys, interviews), analysis, evaluation, testing etc. 
+The first main task to be undertaken is to build a rendering framework in C++ using Vulkan and GLFW. This rendering framework should allow a complex scene to be rendered using compute shaders. Once this has been completed, performance testing should be undertaken to get a baseline for the experiment.
+
+Once a baseline has been recorded, asynchronous compute should be implemented and tested again. Testing on the same hardware under the same conditions is important for this as different hardware can effect this. Once analysing the performance difference, an attempt should be made in how to optimise the code to increase this performance. What techniques make this better?
+
+
+\section{Additional Information / Knowledge Required}
+%New knowledge acquired, extending current skills, technologies used…
+How to analyse performance of software. More indepth GPU programming, 
+job scheduling, compute.
+extending rendering skills
+Vulkan.
+
+\section{Information Sources that Provide a Context for the Project}
+%References, organisations, particular users, prior art (something that has already been done, that is similar to or the same as this project), web sites … 
+Doom?
+
+...
+
+\section{The Importance of the Project}
+%Significance -- but also novelty (is it something that hasn’t been done before – is it a new way of doing something that has been done before e.g. using OpenSource technology where only proprietary in the past).
+
+The project is significant as the technology is quite new for the games industry, for specifically Nvidia GPUs. AMD have had the hardware edge due to having specific Asynchronous Command Engines, whereas only the new Pascal architecture Nvidia cards have the capability. Before, the older architecture could not context switch as quickly as AMD. The reason it was chosen to do the project based on software improvements as opposed to hardware evaluations as lots of companies have tested the asynchronous compute latency across different hardware, but not performance. So testing the overall throughput on a high-end Pascal card and researching how job scheduling and code optimisations may be able to help improve the performance of this is significant to the industry. For a Maxwell card, the drivers for Async Compute were not completely implemented so the question became how you would attempt to schedule simulatenous jobs, and whether they could run graphics and compute workloads concurrently. Now, Pascal cards have fixed this resource allocation issue, as they have implemented a dynamic load balancing system, which means better so async and true concurrency should be possible.
+
+To further the project, it can be developed to then test on different hardware etc.
+
+\section{The Key Challenge(s) to be Overcome}
+%The main anticipated difficulties associated with your project, to which you may have to devote time or attention to ensure success. 
+Researching a new (for nvidia) subject. Will have to devote time to understanding graphics cards architecture a lot more indepth to see how to utilise it to improve performance.
+
+If the performance does not increase, there also needs to be more understanding of why. What are the bottlenecks? 
+
