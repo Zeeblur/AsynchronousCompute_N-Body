@@ -28,7 +28,7 @@ include_directories("${glfw_SOURCE_DIR}/include")
 
 #find vulkan sdk
 include_directories("$ENV{VULKAN_SDK}/include")
-link_directories("$ENV{VULKAN_SDK}/lib32")
+link_directories("$ENV{VULKAN_SDK}/lib")
 
 
 #get glm
