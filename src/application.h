@@ -22,13 +22,25 @@ const std::vector<const char*> validationLayers = {
 	"VK_LAYER_LUNARG_standard_validation"
 };
 
+const std::vector<const char*> deviceExtensions = {
+	VK_KHR_SWAPCHAIN_EXTENSION_NAME
+};
+
 // struct for queues
 struct QueueFamilyIndices {
 	int graphicsFamily = -1;
+	int surfaceFamily = -1;
 
 	bool isComplete() {
-		return graphicsFamily >= 0;
+		return graphicsFamily >= 0 && surfaceFamily >= 0;
 	}
+};
+
+// struct to pass the swapchain details 
+struct SwapChainSupportDetails {
+	VkSurfaceCapabilitiesKHR capabilities;
+	std::vector<VkSurfaceFormatKHR> formats;
+	std::vector<VkPresentModeKHR> presentModes;
 };
 
 
@@ -41,6 +53,8 @@ private:
 	VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
 	VkDevice device;
 	VkQueue graphicsQueue;
+	VkQueue presentQueue;
+	VkSurfaceKHR surface;
 
 	void initWindow();
 	void initVulkan();
@@ -50,16 +64,22 @@ private:
 	//Vulkan Instance methods
 	void createInstance();
 	void setupDebugCallback();
+	void createSurface();
 	void pickPhysicalDevice();
 	void createLogicalDevice();
 
 	// checks
 	bool checkValidationLayerSupport();
 	std::vector<const char*> Application::getExtensions();
+	bool checkDeviceExtensionSupport(VkPhysicalDevice device);
+
 	bool isDeviceSuitable(VkPhysicalDevice device);
 
 	// find queues
 	QueueFamilyIndices findQueuesFamilies(VkPhysicalDevice device);
+
+	SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice device);
+	VkSurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats);
 
 	// create reportcall
 	VkResult CreateDebugReportCallbackEXT(
@@ -88,6 +108,7 @@ private:
 public:
 	void run()
 	{
+		initWindow();
 		initVulkan();
 		mainLoop();
 		cleanup();

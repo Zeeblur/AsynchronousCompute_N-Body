@@ -1,10 +1,12 @@
 #include "application.h"
+#include <set>
 
 void Application::initWindow()
 {
 	glfwInit();
 
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+	glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
 	window = glfwCreateWindow(800, 600, "Vulkan window", nullptr, nullptr);
 }
 
@@ -12,7 +14,9 @@ void Application::initVulkan()
 {
 	createInstance();
 	setupDebugCallback();
+	createSurface();
 	pickPhysicalDevice();
+	createLogicalDevice();
 }
 
 void Application::mainLoop()
@@ -27,6 +31,7 @@ void Application::cleanup()
 {
 	vkDestroyDevice(device, nullptr);
 	DestroyDebugReportCallbackEXT(instance, callback, nullptr);
+	vkDestroySurfaceKHR(instance, surface, nullptr);
 	vkDestroyInstance(instance, nullptr);
 	glfwDestroyWindow(window);
 	glfwTerminate();
@@ -95,6 +100,13 @@ void Application::setupDebugCallback()
 
 }
 
+// create surface for interfacing with GLFW to render things on screen
+void Application::createSurface()
+{
+	if (glfwCreateWindowSurface(instance, window, nullptr, &surface) != VK_SUCCESS)
+		throw std::runtime_error("Failed to create glfw surface.");
+}
+
 // select GPU that supports the features needed
 void Application::pickPhysicalDevice()
 {
@@ -127,22 +139,36 @@ void Application::pickPhysicalDevice()
 	std::cout << "device suitable" << std::endl;
 }
 
-// create a logic device
+// create a logic device + queues
 void Application::createLogicalDevice()
 {
 	// specify the queues to create
 	// returns indicies of queues that can support graphics calls
 	QueueFamilyIndices indices = findQueuesFamilies(physicalDevice);
 
-	VkDeviceQueueCreateInfo queueCreateInfo = {};
-	queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-	queueCreateInfo.queueFamilyIndex = indices.graphicsFamily;
-	queueCreateInfo.queueCount = 1;
+	std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
+	std::set<int> uniqueQFamilies = { indices.graphicsFamily, indices.surfaceFamily };
+	
 
 	// influence sheduling of the command buffer (NEEDED EVEN IF ONLY 1 Q)
 	float queuePriority = 1.0f;
-	queueCreateInfo.pQueuePriorities = &queuePriority;
 
+	// for each unique queue family, create a new info for them and add to list
+	for (int queueFam : uniqueQFamilies)
+	{
+		VkDeviceQueueCreateInfo qCreateInfo;
+		qCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+		
+		// this is either graphics/surface etc
+		qCreateInfo.queueFamilyIndex = queueFam;
+
+		qCreateInfo.pQueuePriorities = &queuePriority;
+		qCreateInfo.queueCount = 1;
+
+		// add to list
+		queueCreateInfos.push_back(qCreateInfo);
+	}
+	
 	// define features wanted to use **
 	VkPhysicalDeviceFeatures deviceFeatures = {};
 
@@ -150,8 +176,8 @@ void Application::createLogicalDevice()
 	VkDeviceCreateInfo createInfo = {};
 	createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
 	// add queue info and devices
-	createInfo.pQueueCreateInfos = &queueCreateInfo;
-	createInfo.queueCreateInfoCount = 1;
+	createInfo.pQueueCreateInfos = queueCreateInfos.data();
+	createInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
 	createInfo.pEnabledFeatures = &deviceFeatures;
 
 	// no extensions needed 
@@ -171,6 +197,7 @@ void Application::createLogicalDevice()
 		throw std::runtime_error("Failed to create logical device!");
 
 	vkGetDeviceQueue(device, indices.graphicsFamily, 0, &graphicsQueue);
+	vkGetDeviceQueue(device, indices.surfaceFamily, 0, &presentQueue);
 	
 }
 
@@ -227,16 +254,51 @@ std::vector<const char*> Application::getExtensions()
 	return extensions;
 }
 
+// check for device capability
 bool Application::isDeviceSuitable(VkPhysicalDevice device)
 {
+	// check for physical properties
 	VkPhysicalDeviceProperties deviceProperties;
 	VkPhysicalDeviceFeatures deviceFeatures;
 	vkGetPhysicalDeviceProperties(device, &deviceProperties);
 	vkGetPhysicalDeviceFeatures(device, &deviceFeatures);
 
 	// is this a discrete gpu and does it have geom capabilities 
-	return deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU &&
+	bool physical = deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU &&
 		deviceFeatures.geometryShader;
+
+	QueueFamilyIndices indices = findQueuesFamilies(device);
+
+	bool extensionsSupported = checkDeviceExtensionSupport(device);
+
+	bool swapChainAdequate = false;
+	if (extensionsSupported) {
+		SwapChainSupportDetails swapChainSupport = querySwapChainSupport(device);
+		swapChainAdequate = !swapChainSupport.formats.empty() && !swapChainSupport.presentModes.empty();
+	}
+
+	return physical && indices.isComplete() && extensionsSupported && swapChainAdequate;
+}
+
+// check if all extensions include required ones
+bool Application::checkDeviceExtensionSupport(VkPhysicalDevice device)
+{
+	// get extensions
+	uint32_t extensionCount;
+	vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, nullptr);
+
+	// create list of availble extensions
+	std::vector<VkExtensionProperties> availableExtensions(extensionCount);
+	vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, availableExtensions.data());
+
+	std::set<std::string> requiredExtensions(deviceExtensions.begin(), deviceExtensions.end());
+
+	for (const auto& extension : availableExtensions)
+	{
+		requiredExtensions.erase(extension.extensionName);
+	}
+
+	return requiredExtensions.empty();
 }
 
 VKAPI_ATTR VkBool32 VKAPI_CALL Application::debugCallback(VkDebugReportFlagsEXT flags, VkDebugReportObjectTypeEXT objType, uint64_t obj, size_t location, int32_t code, const char * layerPrefix, const char * msg, void * userData)
@@ -286,14 +348,54 @@ QueueFamilyIndices Application::findQueuesFamilies(VkPhysicalDevice device)
 	vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilies.data());
 
 	// find suitable family that supports graphics.
-	for (unsigned int i = 0; i > queueFamilies.size(); ++i)
+	unsigned int i = 0;
+	for (const auto& queueFamily : queueFamilies)
 	{
-		if (queueFamilies[i].queueCount > 0 && queueFamilies[i].queueFlags & VK_QUEUE_GRAPHICS_BIT)
+
+		// check for presentation support to window
+		VkBool32 presentSupport = false;
+		vkGetPhysicalDeviceSurfaceSupportKHR(device, i, surface, &presentSupport);
+		if (queueFamily.queueCount > 0 && presentSupport)
+			indices.surfaceFamily = i;
+	
+
+		// check for drawing command support
+		if (queueFamily.queueCount > 0 && queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)
 			indices.graphicsFamily = i;
 	
 		if (indices.isComplete())
 			break;
+
+		i++;
 	}
 
 	return indices;
 }
+
+// check swapchain support for surface format, presentation mode, swap extent.
+SwapChainSupportDetails Application::querySwapChainSupport(VkPhysicalDevice device) {
+	SwapChainSupportDetails details;
+
+	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, surface, &details.capabilities);
+
+	uint32_t formatCount;
+	vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &formatCount, nullptr);
+
+	if (formatCount != 0) {
+		details.formats.resize(formatCount);
+		vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &formatCount, details.formats.data());
+	}
+
+	uint32_t presentModeCount;
+	vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &presentModeCount, nullptr);
+
+	if (presentModeCount != 0) {
+		details.presentModes.resize(presentModeCount);
+		vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &presentModeCount, details.presentModes.data());
+	}
+
+	return details;
+}
+
+
+//create swapchain
