@@ -44,6 +44,8 @@ include_directories("${glm_SOURCE_DIR}")
 # Add all files from a src folder
 file(GLOB_RECURSE SOURCES src/*.cpp src/*.h)
 
+#file(GLOB_RECURSE SHADERS res/shaders/*.vert res/shaders/*.frag)
+
 add_executable(VulkanTest ${SOURCES})
 target_link_libraries (VulkanTest  ${EXTRA_LIBS})
 

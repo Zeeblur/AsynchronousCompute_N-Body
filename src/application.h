@@ -9,6 +9,8 @@
 
 #include <iostream>
 #include <vector>
+#include <algorithm>
+#include <fstream>
 
 
 // if debugging - do INSTANCE validation layers
@@ -26,13 +28,35 @@ const std::vector<const char*> deviceExtensions = {
 	VK_KHR_SWAPCHAIN_EXTENSION_NAME
 };
 
+// read in binaries/ shader SPIR-V files
+static std::vector<char> readFile(const std::string& filename) 
+{
+	// ate - start reading at the end of file to allocate a buffer for the size of the text
+	std::ifstream file(filename, std::ios::ate | std::ios::binary);
+
+	if (!file.is_open())
+		throw std::runtime_error("cannot open file!");
+
+	// allocate size
+	size_t fileSize = (size_t)file.tellg();
+	std::vector<char> buffer(fileSize);
+
+	// start at begining and fill buffer up to stream count (file size)
+	file.seekg(0);
+	file.read(buffer.data(), fileSize);
+
+	file.close();
+
+	return buffer;
+}
+
 // struct for queues
 struct QueueFamilyIndices {
 	int graphicsFamily = -1;
-	int surfaceFamily = -1;
+	int presentFamily = -1;
 
 	bool isComplete() {
-		return graphicsFamily >= 0 && surfaceFamily >= 0;
+		return graphicsFamily >= 0 && presentFamily >= 0;
 	}
 };
 
@@ -55,6 +79,12 @@ private:
 	VkQueue graphicsQueue;
 	VkQueue presentQueue;
 	VkSurfaceKHR surface;
+	VkSwapchainKHR swapChain;
+	VkFormat swapChainImageFormat;
+	VkExtent2D swapChainExtent;
+
+	std::vector<VkImage> swapChainImages;
+	std::vector<VkImageView> swapChainImageViews;
 
 	void initWindow();
 	void initVulkan();
@@ -67,6 +97,9 @@ private:
 	void createSurface();
 	void pickPhysicalDevice();
 	void createLogicalDevice();
+	void createSwapChain();
+	void createImageViews();
+	void createGraphicsPipeline();
 
 	// checks
 	bool checkValidationLayerSupport();
@@ -80,6 +113,9 @@ private:
 
 	SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice device);
 	VkSurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats);
+	VkPresentModeKHR chooseSwapPresentMode(const std::vector<VkPresentModeKHR> availablePresentModes);
+	VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities);
+
 
 	// create reportcall
 	VkResult CreateDebugReportCallbackEXT(
@@ -104,6 +140,9 @@ private:
 		VkDebugReportCallbackEXT callback,
 		const VkAllocationCallbacks* pAllocator);
 
+
+	const int WIDTH = 800;
+	const int HEIGHT = 600;
 
 public:
 	void run()
