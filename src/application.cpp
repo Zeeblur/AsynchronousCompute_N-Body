@@ -280,6 +280,7 @@ void Application::createSwapChain()
 	createInfo.clipped = VK_TRUE;
 
 
+
 	// null for now - but this stores old chain for when it needs to be re-created entirely due to a window resize or something.
 	createInfo.oldSwapchain = VK_NULL_HANDLE;
 
