@@ -35,7 +35,7 @@ static std::vector<char> readFile(const std::string& filename)
 	std::ifstream file(filename, std::ios::ate | std::ios::binary);
 
 	if (!file.is_open())
-		throw std::runtime_error("cannot open file!");
+		throw std::runtime_error("cannot open file! " + filename);
 
 	// allocate size
 	size_t fileSize = (size_t)file.tellg();
@@ -82,9 +82,15 @@ private:
 	VkSwapchainKHR swapChain;
 	VkFormat swapChainImageFormat;
 	VkExtent2D swapChainExtent;
+	VkRenderPass renderPass;
+	VkPipelineLayout pipelineLayout;
+	VkPipeline graphicsPipeline;
+	VkCommandPool commandPool;
 
 	std::vector<VkImage> swapChainImages;
 	std::vector<VkImageView> swapChainImageViews;
+	std::vector<VkFramebuffer> swapChainFramebuffers;
+	std::vector<VkCommandBuffer> commandBuffers;
 
 	void initWindow();
 	void initVulkan();
@@ -99,7 +105,13 @@ private:
 	void createLogicalDevice();
 	void createSwapChain();
 	void createImageViews();
+	void createRenderPass();
 	void createGraphicsPipeline();
+	void createFramebuffers();
+	void createCommandPool();
+	void createCommandBuffers();
+
+	void drawFrame();
 
 	// checks
 	bool checkValidationLayerSupport();
@@ -115,7 +127,7 @@ private:
 	VkSurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats);
 	VkPresentModeKHR chooseSwapPresentMode(const std::vector<VkPresentModeKHR> availablePresentModes);
 	VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities);
-
+	VkShaderModule createShaderModule(const std::vector<char>& code);
 
 	// create reportcall
 	VkResult CreateDebugReportCallbackEXT(

@@ -49,5 +49,8 @@ file(GLOB_RECURSE SOURCES src/*.cpp src/*.h)
 add_executable(VulkanTest ${SOURCES})
 target_link_libraries (VulkanTest  ${EXTRA_LIBS})
 
+add_custom_command(TARGET VulkanTest POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E copy_directory  "${PROJECT_SOURCE_DIR}/res" $<TARGET_FILE_DIR:VulkanTest>/res)
+
 target_link_libraries(VulkanTest glfw)
 target_link_libraries(VulkanTest vulkan-1)
