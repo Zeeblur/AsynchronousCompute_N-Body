@@ -23,6 +23,7 @@ void Application::initVulkan()
 	createGraphicsPipeline();
 	createFramebuffers();
 	createCommandPool();
+	createVertexBuffer();
 	createCommandBuffers();
 	createSemaphores();
 }
@@ -55,6 +56,7 @@ void Application::cleanup()
 	vkDestroyRenderPass(device, renderPass, nullptr);
 	vkDestroySwapchainKHR(device, swapChain, nullptr);
 	vkDestroyDevice(device, nullptr);
+	vkDestroyBuffer(device, vertexBuffer, nullptr);
 	DestroyDebugReportCallbackEXT(instance, callback, nullptr);
 	vkDestroySurfaceKHR(instance, surface, nullptr);
 	vkDestroyInstance(instance, nullptr);
@@ -457,12 +459,19 @@ void Application::createGraphicsPipeline()
 
 	// define fixed functions - explict about data bindings and attributes
 
+	// get binding and attribute descriptions
+	auto bindingDesc = Vertex::getBindingDescription();
+	auto attributeDesc = Vertex::getAttributeDescription();
+
 	VkPipelineVertexInputStateCreateInfo vertexInputInfo = {};
 	vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-	vertexInputInfo.vertexBindingDescriptionCount = 0;
-	vertexInputInfo.pVertexBindingDescriptions = nullptr; // Optional
-	vertexInputInfo.vertexAttributeDescriptionCount = 0;
-	vertexInputInfo.pVertexAttributeDescriptions = nullptr; // Optional
+	// where is it bound
+	vertexInputInfo.vertexBindingDescriptionCount = 1;
+	vertexInputInfo.pVertexBindingDescriptions = &bindingDesc;
+
+	// size of att desc
+	vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDesc.size());
+	vertexInputInfo.pVertexAttributeDescriptions = attributeDesc.data; 
 
 	// specify the geometry to draw fdrom the vertices can use topology or element buffers here
 	VkPipelineInputAssemblyStateCreateInfo inputAssembly = {};
@@ -660,6 +669,37 @@ void Application::createCommandPool()
 	
 }
 
+// create vertex buffer objs
+void Application::createVertexBuffer()
+{
+	// create struct as usual
+	VkBufferCreateInfo bufferInfo = {};
+	bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+	// how big is the buffer (enough to store the size of 1 obj * how many)
+	bufferInfo.size = sizeof(vertices[0]) * vertices.size();
+	
+	// what purpose is this buffer going to be used for ( can use multiple things)
+	bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+
+	// buffer only used by the graphics queue so it can be exclusive
+	bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+	// create it
+	if (vkCreateBuffer(device, &bufferInfo, nullptr, &vertexBuffer) != VK_SUCCESS)
+	{
+		throw std::runtime_error("Failed to create vertex buffer");
+	}
+
+
+	// Memory requirements
+	VkMemoryRequirements memRequirements;
+	vkGetBufferMemoryRequirements(device, vertexBuffer, &memRequirements);
+
+
+
+
+}
+
 // record the commands!
 void Application::createCommandBuffers()
 {
@@ -805,7 +845,6 @@ void Application::drawFrame()
 
 	vkQueuePresentKHR(presentQueue, &presentInfo);
 
-
 	// wait until presentation is finished before drawing the next frame
 	vkQueueWaitIdle(presentQueue);
 
@@ -931,6 +970,25 @@ bool Application::checkDeviceExtensionSupport(VkPhysicalDevice device)
 	return requiredExtensions.empty();
 }
 
+// query info
+uint32_t Application::findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties)
+{
+	// query info about the avaliable types of memory
+	VkPhysicalDeviceMemoryProperties memProperties;
+	vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memProperties);
+
+	// check and return index if desired properties are found.
+	for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++)
+	{
+		if ((typeFilter & (1 << i)) && (memProperties.memoryTypes[i].propertyFlags & properties) == properties)
+		{
+			return i;
+		}
+	}
+
+	throw std::runtime_error("Failed to fins suitable memory type!");
+}
+
 VKAPI_ATTR VkBool32 VKAPI_CALL Application::debugCallback(VkDebugReportFlagsEXT flags, VkDebugReportObjectTypeEXT objType, uint64_t obj, size_t location, int32_t code, const char * layerPrefix, const char * msg, void * userData)
 {
 	std::cerr << "validation layer: " << msg << std::endl;
@@ -1048,7 +1106,6 @@ VkSurfaceFormatKHR Application::chooseSwapSurfaceFormat(const std::vector<VkSurf
 	// if none is found that is suitable, just use the first one.
 	return availableFormats[0];
 }
-
 
 // Actual conditions for displaying to the screen !!!!
 VkPresentModeKHR Application::chooseSwapPresentMode(const std::vector<VkPresentModeKHR> availablePresentModes)

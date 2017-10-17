@@ -6,11 +6,12 @@
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <glm/vec4.hpp>
 #include <glm/mat4x4.hpp>
-
+#include <glm/glm.hpp>
 #include <iostream>
 #include <vector>
 #include <algorithm>
 #include <fstream>
+#include <array>
 
 
 // if debugging - do INSTANCE validation layers
@@ -68,6 +69,57 @@ struct SwapChainSupportDetails {
 };
 
 
+// structs to store vertex attributes
+struct Vertex
+{
+	glm::vec2 pos;
+	glm::vec3 colour;
+
+	// how to pass to vertex shader
+	static VkVertexInputBindingDescription getBindingDescription()
+	{
+		VkVertexInputBindingDescription bindingDescription = {};
+
+		// 1 binding as all data is in 1 array. binding is index.
+		// stride is bytes between entries (in this case 1 whole vertex struct)
+		// move to the next data entry after each vertex (not instanced rendering)
+		bindingDescription.binding = 0;
+		bindingDescription.stride = sizeof(Vertex);
+		bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+
+
+		return bindingDescription;
+	}
+
+	// get attribute descriptions...
+	static std::array<VkVertexInputAttributeDescription, 2> getAttributeDescription()
+	{
+		// 2 attributes (position and colour) so two description structs
+		std::array<VkVertexInputAttributeDescription, 2> attributeDesc = {};
+
+		attributeDesc[0].binding = 0; // which binding (the only one created above)
+		attributeDesc[0].location = 0; // which location of the vertex shader
+		attributeDesc[0].format = VK_FORMAT_R32G32_SFLOAT; // format as a vector 2 (2floats)
+		attributeDesc[0].offset = offsetof(Vertex, pos); // calculate the offset within each Vertex
+
+		// as above but for colour
+		attributeDesc[1].binding = 0; 
+		attributeDesc[1].location = 1;
+		attributeDesc[1].format = VK_FORMAT_R32G32B32_SFLOAT; // format as a vector 3 (3floats)
+		attributeDesc[1].offset = offsetof(Vertex, colour); 
+
+		return attributeDesc;
+	}
+};
+
+
+// hard code some data (interleaving vertex attributes)
+const std::vector<Vertex> vertices = {
+	{ { 0.0f, -0.5f },{ 1.0f, 0.0f, 0.0f } },
+	{ { 0.5f, 0.5f },{ 0.0f, 1.0f, 0.0f } },
+	{ { -0.5f, 0.5f },{ 0.0f, 0.0f, 1.0f } }
+};
+
 class Application
 {
 private:
@@ -88,6 +140,8 @@ private:
 	VkCommandPool commandPool;
 	VkSemaphore imageAvailableSemaphore;
 	VkSemaphore renderFinishedSemaphore;
+	VkBuffer vertexBuffer;
+
 
 	std::vector<VkImage> swapChainImages;
 	std::vector<VkImageView> swapChainImageViews;
@@ -98,6 +152,8 @@ private:
 	void initVulkan();
 	void mainLoop();
 	void cleanup();
+	 
+
 
 	//Vulkan Instance methods
 	void createInstance();
@@ -111,6 +167,7 @@ private:
 	void createGraphicsPipeline();
 	void createFramebuffers();
 	void createCommandPool();
+	void createVertexBuffer();
 	void createCommandBuffers();
 	void createSemaphores();
 
@@ -123,6 +180,8 @@ private:
 	bool checkDeviceExtensionSupport(VkPhysicalDevice device);
 
 	bool isDeviceSuitable(VkPhysicalDevice device);
+
+	uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
 
 	// find queues
 	QueueFamilyIndices findQueuesFamilies(VkPhysicalDevice device);
