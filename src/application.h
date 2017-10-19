@@ -122,9 +122,16 @@ const std::vector<Vertex> vertices =
 	{ { -0.5f, 0.5f },{ 1.0f, 1.0f, 1.0f } }
 };
 
-const std::vector<uint16_t> indices =
+const std::vector<uint16_t> indices = 
 {
 	0, 1, 2, 2, 3, 0
+};
+
+struct UniformBufferObject
+{
+	glm::mat4 model;
+	glm::mat4 view;
+	glm::mat4 proj;
 };
 
 class Application
@@ -142,6 +149,7 @@ private:
 	VkFormat swapChainImageFormat;
 	VkExtent2D swapChainExtent;
 	VkRenderPass renderPass;
+	VkDescriptorSetLayout descriptorSetLayout;
 	VkPipelineLayout pipelineLayout;
 	VkPipeline graphicsPipeline;
 	VkCommandPool commandPool;
@@ -151,6 +159,10 @@ private:
 	VkDeviceMemory vertexBufferMemory;
 	VkBuffer indexBuffer;
 	VkDeviceMemory indexBufferMemory;
+	VkBuffer uniformBuffer;
+	VkDeviceMemory uniformBufferMemory;
+	VkDescriptorPool descriptorPool;
+	VkDescriptorSet descriptorSet;
 
 
 	std::vector<VkImage> swapChainImages;
@@ -175,19 +187,26 @@ private:
 	void createSwapChain();
 	void createImageViews();
 	void createRenderPass();
+	void createDescriptorSetLayout();
 	void createGraphicsPipeline();
 	void createFramebuffers();
 	void createCommandPool();
 
 	// TODO: SHOULDN'T ALLOCATE MEMORY FOR EVERY OBJECT INDIVIDUALLY - NEED TO IMPLEMENT ALLOCATOR
 	void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
+	void copyBuffer(VkBuffer srcBuff, VkBuffer targetBuff, VkDeviceSize size);
 	void createVertexBuffer();
 	void createIndexBuffer();
+	void createUniformBuffer(); // NOT MOST EFFICIENT WAY TODO: CHANGE TO PUSH CONSTANTS
+	void createDescriptorPool();
+	void createDescriptorSet();
+
 	void createCommandBuffers();
 	void createSemaphores();
 
 	void drawFrame();
-	void copyBuffer(VkBuffer srcBuff, VkBuffer targetBuff, VkDeviceSize size);
+	void updateUniformBuffer();
+
 
 	// checks
 	bool checkValidationLayerSupport();
