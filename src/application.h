@@ -114,10 +114,17 @@ struct Vertex
 
 
 // hard code some data (interleaving vertex attributes)
-const std::vector<Vertex> vertices = {
-	{ { 0.0f, -0.5f },{ 1.0f, 0.0f, 0.0f } },
-	{ { 0.5f, 0.5f },{ 0.0f, 1.0f, 0.0f } },
-	{ { -0.5f, 0.5f },{ 0.0f, 0.0f, 1.0f } }
+const std::vector<Vertex> vertices =
+{
+	{ { -0.5f, -0.5f },{ 1.0f, 0.0f, 0.0f } },
+	{ { 0.5f, -0.5f },{ 0.0f, 1.0f, 0.0f } },
+	{ { 0.5f, 0.5f },{ 0.0f, 0.0f, 1.0f } },
+	{ { -0.5f, 0.5f },{ 1.0f, 1.0f, 1.0f } }
+};
+
+const std::vector<uint16_t> indices =
+{
+	0, 1, 2, 2, 3, 0
 };
 
 class Application
@@ -141,6 +148,9 @@ private:
 	VkSemaphore imageAvailableSemaphore;
 	VkSemaphore renderFinishedSemaphore;
 	VkBuffer vertexBuffer;
+	VkDeviceMemory vertexBufferMemory;
+	VkBuffer indexBuffer;
+	VkDeviceMemory indexBufferMemory;
 
 
 	std::vector<VkImage> swapChainImages;
@@ -152,6 +162,7 @@ private:
 	void initVulkan();
 	void mainLoop();
 	void cleanup();
+	void cleanupSwapChain();
 	 
 
 
@@ -167,12 +178,16 @@ private:
 	void createGraphicsPipeline();
 	void createFramebuffers();
 	void createCommandPool();
+
+	// TODO: SHOULDN'T ALLOCATE MEMORY FOR EVERY OBJECT INDIVIDUALLY - NEED TO IMPLEMENT ALLOCATOR
+	void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
 	void createVertexBuffer();
+	void createIndexBuffer();
 	void createCommandBuffers();
 	void createSemaphores();
 
 	void drawFrame();
-	
+	void copyBuffer(VkBuffer srcBuff, VkBuffer targetBuff, VkDeviceSize size);
 
 	// checks
 	bool checkValidationLayerSupport();
