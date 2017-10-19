@@ -12,7 +12,8 @@
 #include <algorithm>
 #include <fstream>
 #include <array>
-
+#include <memory>
+#include "particle.h"
 
 // if debugging - do INSTANCE validation layers
 #ifdef NDEBUG
@@ -114,7 +115,7 @@ struct Vertex
 
 
 // hard code some data (interleaving vertex attributes)
-const std::vector<Vertex> vertices =
+const std::vector<Vertex> verticsades =
 {
 	{ { -0.5f, -0.5f },{ 1.0f, 0.0f, 0.0f } },
 	{ { 0.5f, -0.5f },{ 0.0f, 1.0f, 0.0f } },
@@ -155,10 +156,11 @@ private:
 	VkCommandPool commandPool;
 	VkSemaphore imageAvailableSemaphore;
 	VkSemaphore renderFinishedSemaphore;
-	VkBuffer vertexBuffer;
+	/*VkBuffer vertexBuffer;
 	VkDeviceMemory vertexBufferMemory;
 	VkBuffer indexBuffer;
 	VkDeviceMemory indexBufferMemory;
+	*/
 	VkBuffer uniformBuffer;
 	VkDeviceMemory uniformBufferMemory;
 	VkDescriptorPool descriptorPool;
@@ -176,7 +178,10 @@ private:
 	void cleanup();
 	void cleanupSwapChain();
 	 
-
+	// vector of particles.
+	//std::vector<std::shared_ptr<particle>> particles;
+	particle particle;
+	void initScene();
 
 	//Vulkan Instance methods
 	void createInstance();
@@ -193,10 +198,7 @@ private:
 	void createCommandPool();
 
 	// TODO: SHOULDN'T ALLOCATE MEMORY FOR EVERY OBJECT INDIVIDUALLY - NEED TO IMPLEMENT ALLOCATOR
-	void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
-	void copyBuffer(VkBuffer srcBuff, VkBuffer targetBuff, VkDeviceSize size);
-	void createVertexBuffer();
-	void createIndexBuffer();
+
 	void createUniformBuffer(); // NOT MOST EFFICIENT WAY TODO: CHANGE TO PUSH CONSTANTS
 	void createDescriptorPool();
 	void createDescriptorSet();
@@ -257,6 +259,7 @@ public:
 	void run()
 	{
 		initWindow();
+		initScene();
 		initVulkan();
 		mainLoop();
 		cleanup();

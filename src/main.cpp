@@ -5,7 +5,8 @@ int main() {
 
 	Application app;
 
-	try {
+	try
+	{
 		app.run();
 	}
 	catch (const std::runtime_error& e)
