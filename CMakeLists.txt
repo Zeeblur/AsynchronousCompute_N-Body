@@ -46,11 +46,25 @@ file(GLOB_RECURSE SOURCES src/*.cpp src/*.h)
 
 #file(GLOB_RECURSE SHADERS res/shaders/*.vert res/shaders/*.frag)
 
-add_executable(VulkanTest ${SOURCES})
-target_link_libraries (VulkanTest  ${EXTRA_LIBS})
+add_executable(vulkantest ${SOURCES})
+target_link_libraries (vulkantest  ${EXTRA_LIBS})
 
-add_custom_command(TARGET VulkanTest POST_BUILD
-  COMMAND ${CMAKE_COMMAND} -E copy_directory  "${PROJECT_SOURCE_DIR}/res" $<TARGET_FILE_DIR:VulkanTest>/res)
+add_custom_command(TARGET vulkantest POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E copy_directory  "${PROJECT_SOURCE_DIR}/res" $<TARGET_FILE_DIR:vulkantest>/res)
 
-target_link_libraries(VulkanTest glfw)
-target_link_libraries(VulkanTest vulkan-1)
+target_link_libraries(vulkantest glfw)
+target_link_libraries(vulkantest vulkan-1)
+
+
+file(GLOB_RECURSE SOURCES2 src/compute/*.cpp src/compute/*.h)
+
+#file(GLOB_RECURSE SHADERS res/shaders/*.vert res/shaders/*.frag)
+
+add_executable(computeTest ${SOURCES2})
+target_link_libraries (computeTest  ${EXTRA_LIBS})
+
+add_custom_command(TARGET computeTest POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E copy_directory  "${PROJECT_SOURCE_DIR}/res" $<TARGET_FILE_DIR:computeTest>/res)
+
+target_link_libraries(computeTest glfw)
+target_link_libraries(computeTest vulkan-1)
