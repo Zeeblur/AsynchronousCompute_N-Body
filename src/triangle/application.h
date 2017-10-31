@@ -194,7 +194,15 @@ private:
 	void cleanup();
 	void cleanupSwapChain();
 	 
+	void recreateSwapChain();
 
+	static void onWindowResized(GLFWwindow* window, int width, int height)
+	{
+		if (width == 0 || height == 0) return;
+
+		Application* app = reinterpret_cast<Application*>(glfwGetWindowUserPointer(window));
+		app->recreateSwapChain();
+	}
 
 	//Vulkan Instance methods
 	void createInstance();

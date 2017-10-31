@@ -13,8 +13,12 @@ void Application::initWindow()
 	glfwInit();
 
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-	glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
-	window = glfwCreateWindow(800, 600, "Vulkan window", nullptr, nullptr);
+	glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
+	window = glfwCreateWindow(WIDTH, HEIGHT, "Vulkan window", nullptr, nullptr);
+
+	// create call back gfor resize
+	glfwSetWindowUserPointer(window, this);
+	glfwSetWindowSizeCallback(window, Application::onWindowResized);
 }
 
 void Application::initVulkan()
@@ -59,6 +63,10 @@ void Application::mainLoop()
  
 void Application::cleanupSwapChain()
 {
+	vkDestroyImageView(device, depthImageView, nullptr);
+	vkDestroyImage(device, depthImage, nullptr);
+	vkFreeMemory(device, depthImageMemory, nullptr);
+
 	for (size_t i = 0; i < swapChainFramebuffers.size(); i++)
 	{
 		vkDestroyFramebuffer(device, swapChainFramebuffers[i], nullptr);
@@ -112,6 +120,21 @@ void Application::cleanup()
 	glfwDestroyWindow(window);
 
 	glfwTerminate();
+}
+
+void Application::recreateSwapChain()
+{
+	vkDeviceWaitIdle(device);
+
+	cleanupSwapChain();
+
+	createSwapChain();
+	createImageViews();
+	createRenderPass();
+	createGraphicsPipeline();
+	createDepthResources();
+	createFramebuffers();
+	createCommandBuffers();
 }
 
 // create a struct with driver specific details
@@ -1213,8 +1236,15 @@ void Application::drawFrame()
 	// 1.  get image from swapchain
 	uint32_t imageIndex;
 	// logical device, swapchain, timeout (max here), signaled when engine is finished using the image, output when it's become available.
-	vkAcquireNextImageKHR(device, swapChain, std::numeric_limits<uint64_t>::max(), imageAvailableSemaphore, VK_NULL_HANDLE, &imageIndex);
+	VkResult result = vkAcquireNextImageKHR(device, swapChain, std::numeric_limits<uint64_t>::max(), imageAvailableSemaphore, VK_NULL_HANDLE, &imageIndex);
 
+	if (result == VK_ERROR_OUT_OF_DATE_KHR)
+	{
+		recreateSwapChain();
+		return;
+	}
+	else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
+		throw std::runtime_error("failed to acquire swap chain image!");
 
 	// 2. Submitting the command buffer
 	VkSubmitInfo submitInfo = {};
@@ -1262,7 +1292,16 @@ void Application::drawFrame()
 	// can specify array of results to check if presentation is successful, but not needed if only 1 swapchain 
 	presentInfo.pResults = nullptr; // Optional
 
-	vkQueuePresentKHR(presentQueue, &presentInfo);
+	result = vkQueuePresentKHR(presentQueue, &presentInfo);
+
+	if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)
+	{
+		recreateSwapChain();
+	}
+	else if (result != VK_SUCCESS)
+	{
+		throw std::runtime_error("failed to present swap chain image!");
+	}
 
 	// wait until presentation is finished before drawing the next frame
 	vkQueueWaitIdle(presentQueue);
@@ -1723,6 +1762,9 @@ VkPresentModeKHR Application::chooseSwapPresentMode(const std::vector<VkPresentM
 // Swap extent is the resolution of the swap chain images - try to match the window
 VkExtent2D Application::chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities)
 {
+	int width, height;
+	glfwGetWindowSize(window, &width, &height);
+
 	// some wm allow whatever
 	if (capabilities.currentExtent.width != std::numeric_limits<uint32_t>::max())
 	{
@@ -1731,7 +1773,7 @@ VkExtent2D Application::chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabil
 	// clamp the values to the max and min values of the capabilities.
 	else
 	{
-		VkExtent2D actualExtent = { WIDTH, HEIGHT };
+		VkExtent2D actualExtent = { width, height };
 
 		actualExtent.width = std::max(capabilities.minImageExtent.width, std::min(capabilities.maxImageExtent.width, actualExtent.width));
 		actualExtent.height = std::max(capabilities.minImageExtent.height, std::min(capabilities.maxImageExtent.height, actualExtent.height));
