@@ -99,7 +99,7 @@ struct Vertex
 
 		attributeDesc[0].binding = 0; // which binding (the only one created above)
 		attributeDesc[0].location = 0; // which location of the vertex shader
-		attributeDesc[0].format = VK_FORMAT_R32G32_SFLOAT; // format as a vector 2 (2floats)
+		attributeDesc[0].format = VK_FORMAT_R32G32B32_SFLOAT; // format as a vector 3 (3floats)
 		attributeDesc[0].offset = offsetof(Vertex, pos); // calculate the offset within each Vertex
 
 		// as above but for colour
@@ -116,24 +116,22 @@ struct Vertex
 // hard code some data (interleaving vertex attributes)
 const std::vector<Vertex> vertices =
 {
-	{ { -0.5f, 0.0f, -0.5f },{ 1.0f, 0.0f, 0.0f } },
-	{ { 0.5f,  0.0f, -0.5f },{ 0.0f, 1.0f, 0.0f } },
-	{ { 0.5f,  0.5f,  0.5f },{ 0.0f, 0.0f, 1.0f } },
-	{ { -0.5f, 0.5f,  0.5f },{ 1.0f, 1.0f, 1.0f } }
-};
+	{ { -0.5f, -0.5f, 0.0f },{ 1.0f, 0.0f, 0.0f }},
+	{ { 0.5f, -0.5f, 0.0f },{ 0.0f, 1.0f, 0.0f }},
+	{ { 0.5f, 0.5f, 0.0f },{ 0.0f, 0.0f, 1.0f }},
+	{ { -0.5f, 0.5f, 0.0f },{ 1.0f, 1.0f, 1.0f }},
 
-// hard code some data (interleaving vertex attributes)
-const std::vector<Vertex> vertices2 =
-{
-	{ { -.25f,-2.5f, 0.f },{ 0.0f, 1.0f, 1.0f } },
-	{ { .25f,-2.5f, 0.f },{ 0.0f, 1.0f, 0.0f } },
-	{ { .25f,2.5f, 0.f },{ 0.0f, 1.0f, 1.0f } },
-	{ { -.25f, 2.5f, 0.f },{ 1.0f, 1.0f, 1.0f } }
+
+	{ { -0.5f, -0.5f, -0.5f },{ 1.0f, 0.0f, 0.0f }},
+	{ { 0.5f, -0.5f, -0.5f },{ 0.0f, 1.0f, 0.0f }},
+	{ { 0.5f, 0.5f, -0.5f },{ 0.0f, 0.0f, 1.0f }},
+	{ { -0.5f, 0.5f, -0.5f },{ 1.0f, 1.0f, 1.0f }}
 };
 
 const std::vector<uint16_t> indices = 
 {
-	0, 1, 2, 2, 3, 0
+	0, 1, 2, 2, 3, 0,
+	4, 5, 6, 6, 7, 4
 };
 
 struct UniformBufferObject
@@ -168,19 +166,11 @@ private:
 	VkBuffer vertexBuffer;
 	VkDeviceMemory vertexBufferMemory;
 
-	VkBuffer vertexBuffer2;
-	VkDeviceMemory vertexBufferMemory2;
-
 	VkBuffer indexBuffer;
 	VkDeviceMemory indexBufferMemory;
 
-	VkBuffer indexBuffer2;
-	VkDeviceMemory indexBufferMemory2;
-
 	VkBuffer uniformBuffer;
 	VkDeviceMemory uniformBufferMemory;
-	VkBuffer uniformBuffer2;
-	VkDeviceMemory uniformBufferMemory2;
 
 	VkDescriptorPool descriptorPool;
 	VkDescriptorSet descriptorSet;

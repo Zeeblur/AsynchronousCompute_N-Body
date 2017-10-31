@@ -40,9 +40,11 @@ download_project(PROJ glm
 add_subdirectory(${glm_SOURCE_DIR} ${glm_BINARY_DIR})
 include_directories("${glm_SOURCE_DIR}")
 
+
+
 # add the exes
 # Add all files from a src folder
-file(GLOB_RECURSE SOURCES src/*.cpp src/*.h)
+file(GLOB_RECURSE SOURCES src/triangle/*.cpp src/triangle/*.h external/*.h)
 
 #file(GLOB_RECURSE SHADERS res/shaders/*.vert res/shaders/*.frag)
 
@@ -54,9 +56,9 @@ add_custom_command(TARGET vulkantest POST_BUILD
 
 target_link_libraries(vulkantest glfw)
 target_link_libraries(vulkantest vulkan-1)
+target_include_directories(vulkantest PRIVATE external/)
 
-
-file(GLOB_RECURSE SOURCES2 src/particles/*.cpp src/particles/*.h)
+file(GLOB_RECURSE SOURCES2 src/particles/*.cpp src/particles/*.h external/*.h)
 
 #file(GLOB_RECURSE SHADERS res/shaders/*.vert res/shaders/*.frag)
 
@@ -68,3 +70,4 @@ add_custom_command(TARGET particles POST_BUILD
 
 target_link_libraries(particles glfw)
 target_link_libraries(particles vulkan-1)
+target_include_directories(particles PRIVATE external/)

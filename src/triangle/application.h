@@ -14,6 +14,7 @@
 #include <array>
 
 
+
 // if debugging - do INSTANCE validation layers
 #ifdef NDEBUG
 const bool enableValidationLayers = false;
@@ -72,8 +73,9 @@ struct SwapChainSupportDetails {
 // structs to store vertex attributes
 struct Vertex
 {
-	glm::vec2 pos;
+	glm::vec3 pos;
 	glm::vec3 colour;
+	glm::vec2 texCoord;
 
 	// how to pass to vertex shader
 	static VkVertexInputBindingDescription getBindingDescription()
@@ -92,14 +94,14 @@ struct Vertex
 	}
 
 	// get attribute descriptions...
-	static std::array<VkVertexInputAttributeDescription, 2> getAttributeDescription()
+	static std::array<VkVertexInputAttributeDescription, 3> getAttributeDescription()
 	{
 		// 2 attributes (position and colour) so two description structs
-		std::array<VkVertexInputAttributeDescription, 2> attributeDesc = {};
+		std::array<VkVertexInputAttributeDescription, 3> attributeDesc = {};
 
 		attributeDesc[0].binding = 0; // which binding (the only one created above)
 		attributeDesc[0].location = 0; // which location of the vertex shader
-		attributeDesc[0].format = VK_FORMAT_R32G32_SFLOAT; // format as a vector 2 (2floats)
+		attributeDesc[0].format = VK_FORMAT_R32G32B32_SFLOAT; // format as a vector 3 (3floats)
 		attributeDesc[0].offset = offsetof(Vertex, pos); // calculate the offset within each Vertex
 
 		// as above but for colour
@@ -107,6 +109,12 @@ struct Vertex
 		attributeDesc[1].location = 1;
 		attributeDesc[1].format = VK_FORMAT_R32G32B32_SFLOAT; // format as a vector 3 (3floats)
 		attributeDesc[1].offset = offsetof(Vertex, colour); 
+		 
+		// texture layout
+		attributeDesc[2].binding = 0;
+		attributeDesc[2].location = 2;
+		attributeDesc[2].format = VK_FORMAT_R32G32_SFLOAT;
+		attributeDesc[2].offset = offsetof(Vertex, texCoord);
 
 		return attributeDesc;
 	}
@@ -114,17 +122,21 @@ struct Vertex
 
 
 // hard code some data (interleaving vertex attributes)
-const std::vector<Vertex> vertices =
-{
-	{ { -0.5f, -0.5f },{ 1.0f, 0.0f, 0.0f } },
-	{ { 0.5f, -0.5f },{ 0.0f, 1.0f, 0.0f } },
-	{ { 0.5f, 0.5f },{ 0.0f, 0.0f, 1.0f } },
-	{ { -0.5f, 0.5f },{ 1.0f, 1.0f, 1.0f } }
+const std::vector<Vertex> vertices = {
+	{ { -0.5f, -0.5f, 0.0f },{ 1.0f, 0.0f, 0.0f },{ 1.0f, 0.0f } },
+	{ { 0.5f, -0.5f, 0.0f },{ 0.0f, 1.0f, 0.0f },{ 0.0f, 0.0f } },
+	{ { 0.5f, 0.5f, 0.0f },{ 0.0f, 0.0f, 1.0f },{ 0.0f, 1.0f } },
+	{ { -0.5f, 0.5f, 0.0f },{ 1.0f, 1.0f, 1.0f },{ 1.0f, 1.0f } },
+
+	{ { -0.5f, -0.5f, -0.5f },{ 1.0f, 0.0f, 0.0f },{ 1.0f, 0.0f } },
+	{ { 0.5f, -0.5f, -0.5f },{ 0.0f, 1.0f, 0.0f },{ 0.0f, 0.0f } },
+	{ { 0.5f, 0.5f, -0.5f },{ 0.0f, 0.0f, 1.0f },{ 0.0f, 1.0f } },
+	{ { -0.5f, 0.5f, -0.5f },{ 1.0f, 1.0f, 1.0f },{ 1.0f, 1.0f } }
 };
 
-const std::vector<uint16_t> indices = 
-{
-	0, 1, 2, 2, 3, 0
+const std::vector<uint16_t> indices = {
+	0, 1, 2, 2, 3, 0,
+	4, 5, 6, 6, 7, 4
 };
 
 struct UniformBufferObject
@@ -163,7 +175,10 @@ private:
 	VkDeviceMemory uniformBufferMemory;
 	VkDescriptorPool descriptorPool;
 	VkDescriptorSet descriptorSet;
-
+	VkImage textureImage;
+	VkDeviceMemory textureImageMemory;
+	VkImageView textureImageView;
+	VkSampler textureSampler;
 
 	std::vector<VkImage> swapChainImages;
 	std::vector<VkImageView> swapChainImageViews;
@@ -191,6 +206,17 @@ private:
 	void createGraphicsPipeline();
 	void createFramebuffers();
 	void createCommandPool();
+
+	// texture stuff
+	void createTextureImage();
+	void createImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory);
+	VkCommandBuffer beginSingleTimeCommands();
+	void endSingleTimeCommands(VkCommandBuffer commandBuffer);
+	void transitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout);
+	void copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
+	void createTextureImageView();
+	VkImageView Application::createImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags);
+	void createTextureSampler();
 
 	// TODO: SHOULDN'T ALLOCATE MEMORY FOR EVERY OBJECT INDIVIDUALLY - NEED TO IMPLEMENT ALLOCATOR
 	void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
