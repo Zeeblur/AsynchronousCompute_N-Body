@@ -14,12 +14,12 @@ class nbody
 	const int WIDTH = 800;
 	const int HEIGHT = 600;
 
-	void initialiseVulkan();
+	void initialiseVulkan(); 
 
 	std::vector<particle> particleBuffer;
 
-
-	std::vector<Vertex> createSphereGeom(const unsigned int stacks, const unsigned int slices, const glm::vec3 &dims);
+	 
+	std::vector<Vertex> createSphereGeom(const unsigned int stacks, const unsigned int slices, glm::vec3 &dims);
 
 	unsigned int num_particles = 0;
 public:
@@ -30,7 +30,7 @@ public:
 	~nbody();
 	
 	void prepareParticles();
-
+	 
 	void run();
 
 };

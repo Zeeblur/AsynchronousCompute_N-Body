@@ -41,8 +41,11 @@ void nbody::run()
 	Application::get()->mainLoop();
 }
 
-std::vector<Vertex> nbody::createSphereGeom(const unsigned int stacks, const unsigned int slices, const glm::vec3 &dims)
+std::vector<Vertex> nbody::createSphereGeom(const unsigned int stacks, const unsigned int slices, glm::vec3 &dims)
 {
+
+	auto olddim = dims.y;
+	dims.y = 1.0f;
 
 	std::vector<Vertex> verticesSphere;
 
@@ -139,6 +142,96 @@ std::vector<Vertex> nbody::createSphereGeom(const unsigned int stacks, const uns
 		}
 		t -= delta_T;
 	}
+
+	dims.x = 2.0f;
+	dims.y = olddim;
+	// Working values
+delta_rho = glm::pi<float>() / static_cast<float>(stacks);
+delta_theta = 2.0f * glm::pi<float>() / static_cast<float>(slices);
+delta_T = dims.y / static_cast<float>(stacks);
+delta_S = dims.x / static_cast<float>(slices);
+t = dims.y;
+s = 0.0f;
+
+	// Iterate through each stack
+	for (unsigned int i = 0; i < stacks; ++i)
+	{
+		// Set starting values for stack
+		float rho = i * delta_rho;
+		s = 0.0f;
+		// Vertex data generated
+		std::array<glm::vec3, 4> verts;
+		std::array<glm::vec2, 4> coords;
+		// Iterate through each slice
+		for (unsigned int j = 0; j < slices; ++j)
+		{
+			// Vertex 0
+			float theta = j * delta_theta;
+			verts[0] = glm::vec3(dims.x * -sin(theta) * sin(rho),
+				dims.y * cos(theta) * sin(rho),
+				dims.z * cos(rho));
+			coords[0] = glm::vec2(s, t);
+			// Vertex 1
+			verts[1] = glm::vec3(dims.x * -sin(theta) * sin(rho + delta_rho),
+				dims.y * cos(theta) * sin(rho + delta_rho),
+				dims.z * cos(rho + delta_rho));
+			coords[1] = glm::vec2(s, t - delta_T);
+			// Vertex 2
+			theta = ((j + 1) == slices) ? 0.0f : (j + 1) * delta_theta;
+			s += delta_S;
+			verts[2] = glm::vec3(dims.x * -sin(theta) * sin(rho),
+				dims.y * cos(theta) * sin(rho),
+				dims.z * cos(rho));
+			coords[2] = glm::vec2(s, t);
+			// Vertex 3
+			verts[3] = glm::vec3(dims.x * -sin(theta) * sin(rho + delta_rho),
+				dims.y * cos(theta) * sin(rho + delta_rho),
+				dims.z * cos(rho + delta_rho));
+			coords[3] = glm::vec2(s, t - delta_T);
+
+			// Recalculate minimal and maximal
+			for (auto &v : verts)
+			{
+				minimal = glm::min(minimal, v);
+				maximal = glm::max(maximal, v);
+			}
+
+			// Triangle 1
+
+			verticesSphere.push_back(Vertex(verts[0], colour, coords[0]));
+			verticesSphere.push_back(Vertex(verts[1], colour, coords[1]));
+			verticesSphere.push_back(Vertex(verts[2], colour, coords[2]));
+
+			// tri 2
+			verticesSphere.push_back(Vertex(verts[1], colour, coords[1]));
+			verticesSphere.push_back(Vertex(verts[3], colour, coords[3]));
+			verticesSphere.push_back(Vertex(verts[2], colour, coords[2]));
+
+
+			//positions.push_back(verts[0]);
+			//normals.push_back(glm::normalize(verts[0]));
+			//tex_coords.push_back(coords[0]);
+			//positions.push_back(verts[1]);
+			//normals.push_back(glm::normalize(verts[1]));
+			//tex_coords.push_back(coords[1]);
+			//positions.push_back(verts[2]);
+			//normals.push_back(glm::normalize(verts[2]));
+			//tex_coords.push_back(coords[2]);
+
+			//// Triangle 2
+			//positions.push_back(verts[1]);
+			//normals.push_back(glm::normalize(verts[1]));
+			//tex_coords.push_back(coords[1]);
+			//positions.push_back(verts[3]);
+			//normals.push_back(glm::normalize(verts[3]));
+			//tex_coords.push_back(coords[3]);
+			//positions.push_back(verts[2]);
+			//normals.push_back(glm::normalize(verts[2]));
+			//tex_coords.push_back(coords[2]);
+		}
+		t -= delta_T;
+	}
+
 
 	// Add buffers to geometry
 	//geom.add_buffer(positions, BUFFER_INDEXES::POSITION_BUFFER);
