@@ -123,26 +123,6 @@ struct Vertex
 	}
 };
 
-
-// hard code some data (interleaving vertex attributes)
-//const std::vector<Vertex>  = {
-//	{ { -0.5f, -0.5f, 0.0f },{ 1.0f, 0.0f, 0.0f },{ 1.0f, 0.0f } },
-//	{ { 0.5f, -0.5f, 0.0f },{ 0.0f, 1.0f, 0.0f },{ 0.0f, 0.0f } },
-//	{ { 0.5f, 0.5f, 0.0f },{ 0.0f, 0.0f, 1.0f },{ 0.0f, 1.0f } },
-//	{ { -0.5f, 0.5f, 0.0f },{ 1.0f, 1.0f, 1.0f },{ 1.0f, 1.0f } }//,
-///*
-//	{ { -0.5f, -0.5f, -0.5f },{ 1.0f, 0.0f, 0.0f },{ 1.0f, 0.0f } },
-//	{ { 0.5f, -0.5f, -0.5f },{ 0.0f, 1.0f, 0.0f },{ 0.0f, 0.0f } },
-//	{ { 0.5f, 0.5f, -0.5f },{ 0.0f, 0.0f, 1.0f },{ 0.0f, 1.0f } },
-//	{ { -0.5f, 0.5f, -0.5f },{ 1.0f, 1.0f, 1.0f },{ 1.0f, 1.0f } }*/
-//};
-
-const std::vector<uint16_t> indices = {
-	0, 1, 2, 2, 3, 0,
-
-	4, 5, 6, 6, 7, 4
-};
-
 struct UniformBufferObject
 {
 	glm::mat4 model;
@@ -173,8 +153,8 @@ private:
 	VkSemaphore renderFinishedSemaphore;
 	VkBuffer vertexBuffer;
 	VkDeviceMemory vertexBufferMemory;
-	//VkBuffer indexBuffer;
-	//VkDeviceMemory indexBufferMemory;
+	VkBuffer indexBuffer;
+	VkDeviceMemory indexBufferMemory;
 	VkBuffer uniformBuffer;
 	VkDeviceMemory uniformBufferMemory;
 	VkDescriptorPool descriptorPool;
@@ -193,6 +173,7 @@ private:
 	std::vector<VkCommandBuffer> commandBuffers;
 
 	std::vector<Vertex> vertices;
+	std::vector<uint16_t> indices;
 
 	void initWindow();
 	void initVulkan();
@@ -244,7 +225,7 @@ private:
 	// TODO: SHOULDN'T ALLOCATE MEMORY FOR EVERY OBJECT INDIVIDUALLY - NEED TO IMPLEMENT ALLOCATOR
 	void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
 	void copyBuffer(VkBuffer srcBuff, VkBuffer targetBuff, VkDeviceSize size);
-	//void createVertexBuffer();
+	void createVertexBuffer();
 	void createIndexBuffer();
 	void createUniformBuffer(); // NOT MOST EFFICIENT WAY TODO: CHANGE TO PUSH CONSTANTS
 	void createDescriptorPool();
@@ -319,7 +300,7 @@ public:
 
 	void mainLoop();
 
-	void createVertexBuffer(const std::vector<Vertex> vert);
+	void setVertexData(const std::vector<Vertex>& vert, const std::vector<uint16_t>& ind);
 	void createConfig();
 
 	void clean()

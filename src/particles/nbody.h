@@ -17,9 +17,10 @@ class nbody
 	void initialiseVulkan();
 
 	std::vector<particle> particleBuffer;
+	std::vector<Vertex> vertexBuffer;
+	std::vector<uint16_t> indexBuffer;
 
-
-	std::vector<Vertex> createSphereGeom(const unsigned int stacks, const unsigned int slices, const glm::vec3 &dims);
+	void createSphereGeom(const unsigned int stacks, const unsigned int slices, const glm::vec3 &dims);
 
 	unsigned int num_particles = 0;
 public:

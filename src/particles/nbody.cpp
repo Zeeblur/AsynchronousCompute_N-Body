@@ -36,23 +36,17 @@ void nbody::run()
 	// loop here
 	prepareParticles();
 
-	Application::get()->createVertexBuffer(createSphereGeom(20, 20, vec3(0.5f)));
+	Application::get()->setVertexData(vertexBuffer, indexBuffer);
+
 	Application::get()->createConfig();
 	Application::get()->mainLoop();
 }
 
-std::vector<Vertex> nbody::createSphereGeom(const unsigned int stacks, const unsigned int slices, const glm::vec3 &dims)
+void nbody::createSphereGeom(const unsigned int stacks, const unsigned int slices, const glm::vec3 &dims)
 {
 
-	std::vector<Vertex> verticesSphere;
-
-	std::vector<glm::vec3> positions;
-	std::vector<glm::vec3> normals;
-	std::vector<glm::vec2> tex_coords;
 	glm::vec3 colour = glm::vec3(0.7f, 0.7f, 0.7f);// 1.0f);
-	// Minimal and maximal points
-	glm::vec3 minimal(0.0f, 0.0f, 0.0f);
-	glm::vec3 maximal(0.0f, 0.0f, 0.0f);
+
 	// Working values
 	float delta_rho = glm::pi<float>() / static_cast<float>(stacks);
 	float delta_theta = 2.0f * glm::pi<float>() / static_cast<float>(slices);
@@ -60,6 +54,8 @@ std::vector<Vertex> nbody::createSphereGeom(const unsigned int stacks, const uns
 	float delta_S = dims.x / static_cast<float>(slices);
 	float t = dims.y;
 	float s = 0.0f;
+
+	int ind = 0;
 
 	// Iterate through each stack
 	for (unsigned int i = 0; i < stacks; ++i)
@@ -97,55 +93,36 @@ std::vector<Vertex> nbody::createSphereGeom(const unsigned int stacks, const uns
 				dims.z * cos(rho + delta_rho));
 			coords[3] = glm::vec2(s, t - delta_T);
 
-			// Recalculate minimal and maximal
-			for (auto &v : verts)
-			{
-				minimal = glm::min(minimal, v);
-				maximal = glm::max(maximal, v);
-			}
+
 
 			// Triangle 1
+			//vertexBuffer.push_back(Vertex(verts[0], colour, coords[0]));
+			//vertexBuffer.push_back(Vertex(verts[1], colour, coords[1]));
+			//vertexBuffer.push_back(Vertex(verts[2], colour, coords[2]));
 
-			verticesSphere.push_back(Vertex(verts[0], colour, coords[0]));
-			verticesSphere.push_back(Vertex(verts[1], colour, coords[1]));
-			verticesSphere.push_back(Vertex(verts[2], colour, coords[2]));
+			//// tri 2
+			//vertexBuffer.push_back(Vertex(verts[1], colour, coords[1]));
+			//vertexBuffer.push_back(Vertex(verts[3], colour, coords[3]));
+			//vertexBuffer.push_back(Vertex(verts[2], colour, coords[2]));
 
-			// tri 2
-			verticesSphere.push_back(Vertex(verts[1], colour, coords[1]));
-			verticesSphere.push_back(Vertex(verts[3], colour, coords[3]));
-			verticesSphere.push_back(Vertex(verts[2], colour, coords[2]));
+			//TODO: clean this up
+			vertexBuffer.push_back(Vertex(verts[0], colour, coords[0]));
+			vertexBuffer.push_back(Vertex(verts[1], colour, coords[1]));
+			vertexBuffer.push_back(Vertex(verts[2], colour, coords[2]));
+			vertexBuffer.push_back(Vertex(verts[0], colour, coords[3]));
 
+			indexBuffer.push_back(ind += 0);
+			indexBuffer.push_back(ind += 1);
+			indexBuffer.push_back(ind += 2);
+			indexBuffer.push_back(ind += 1);
+			indexBuffer.push_back(ind += 3);
+			indexBuffer.push_back(ind += 2);
 
-			//positions.push_back(verts[0]);
-			//normals.push_back(glm::normalize(verts[0]));
-			//tex_coords.push_back(coords[0]);
-			//positions.push_back(verts[1]);
-			//normals.push_back(glm::normalize(verts[1]));
-			//tex_coords.push_back(coords[1]);
-			//positions.push_back(verts[2]);
-			//normals.push_back(glm::normalize(verts[2]));
-			//tex_coords.push_back(coords[2]);
-
-			//// Triangle 2
-			//positions.push_back(verts[1]);
-			//normals.push_back(glm::normalize(verts[1]));
-			//tex_coords.push_back(coords[1]);
-			//positions.push_back(verts[3]);
-			//normals.push_back(glm::normalize(verts[3]));
-			//tex_coords.push_back(coords[3]);
-			//positions.push_back(verts[2]);
-			//normals.push_back(glm::normalize(verts[2]));
-			//tex_coords.push_back(coords[2]);
+			ind += 4;
 		}
 		t -= delta_T;
 	}
 
-	// Add buffers to geometry
-	//geom.add_buffer(positions, BUFFER_INDEXES::POSITION_BUFFER);
-	//geom.add_buffer(colours, BUFFER_INDEXES::COLOUR_BUFFER);
-	//geom.add_buffer(tex_coords, BUFFER_INDEXES::TEXTURE_COORDS_0);
-
-	return verticesSphere;
 }
 
 
