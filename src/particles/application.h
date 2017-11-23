@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <fstream>
 #include <array>
+#include <memory>
 
 
 
@@ -77,6 +78,8 @@ struct Vertex
 	glm::vec3 colour;
 	glm::vec2 texCoord;
 
+	Vertex(glm::vec3 p, glm::vec3 c, glm::vec2 t) : pos(p), colour(c), texCoord(t){}
+
 	// how to pass to vertex shader
 	static VkVertexInputBindingDescription getBindingDescription()
 	{
@@ -122,20 +125,21 @@ struct Vertex
 
 
 // hard code some data (interleaving vertex attributes)
-const std::vector<Vertex> vertices = {
-	{ { -0.5f, -0.5f, 0.0f },{ 1.0f, 0.0f, 0.0f },{ 1.0f, 0.0f } },
-	{ { 0.5f, -0.5f, 0.0f },{ 0.0f, 1.0f, 0.0f },{ 0.0f, 0.0f } },
-	{ { 0.5f, 0.5f, 0.0f },{ 0.0f, 0.0f, 1.0f },{ 0.0f, 1.0f } },
-	{ { -0.5f, 0.5f, 0.0f },{ 1.0f, 1.0f, 1.0f },{ 1.0f, 1.0f } },
-
-	{ { -0.5f, -0.5f, -0.5f },{ 1.0f, 0.0f, 0.0f },{ 1.0f, 0.0f } },
-	{ { 0.5f, -0.5f, -0.5f },{ 0.0f, 1.0f, 0.0f },{ 0.0f, 0.0f } },
-	{ { 0.5f, 0.5f, -0.5f },{ 0.0f, 0.0f, 1.0f },{ 0.0f, 1.0f } },
-	{ { -0.5f, 0.5f, -0.5f },{ 1.0f, 1.0f, 1.0f },{ 1.0f, 1.0f } }
-};
+//const std::vector<Vertex>  = {
+//	{ { -0.5f, -0.5f, 0.0f },{ 1.0f, 0.0f, 0.0f },{ 1.0f, 0.0f } },
+//	{ { 0.5f, -0.5f, 0.0f },{ 0.0f, 1.0f, 0.0f },{ 0.0f, 0.0f } },
+//	{ { 0.5f, 0.5f, 0.0f },{ 0.0f, 0.0f, 1.0f },{ 0.0f, 1.0f } },
+//	{ { -0.5f, 0.5f, 0.0f },{ 1.0f, 1.0f, 1.0f },{ 1.0f, 1.0f } }//,
+///*
+//	{ { -0.5f, -0.5f, -0.5f },{ 1.0f, 0.0f, 0.0f },{ 1.0f, 0.0f } },
+//	{ { 0.5f, -0.5f, -0.5f },{ 0.0f, 1.0f, 0.0f },{ 0.0f, 0.0f } },
+//	{ { 0.5f, 0.5f, -0.5f },{ 0.0f, 0.0f, 1.0f },{ 0.0f, 1.0f } },
+//	{ { -0.5f, 0.5f, -0.5f },{ 1.0f, 1.0f, 1.0f },{ 1.0f, 1.0f } }*/
+//};
 
 const std::vector<uint16_t> indices = {
 	0, 1, 2, 2, 3, 0,
+
 	4, 5, 6, 6, 7, 4
 };
 
@@ -169,8 +173,8 @@ private:
 	VkSemaphore renderFinishedSemaphore;
 	VkBuffer vertexBuffer;
 	VkDeviceMemory vertexBufferMemory;
-	VkBuffer indexBuffer;
-	VkDeviceMemory indexBufferMemory;
+	//VkBuffer indexBuffer;
+	//VkDeviceMemory indexBufferMemory;
 	VkBuffer uniformBuffer;
 	VkDeviceMemory uniformBufferMemory;
 	VkDescriptorPool descriptorPool;
@@ -188,9 +192,11 @@ private:
 	std::vector<VkFramebuffer> swapChainFramebuffers;
 	std::vector<VkCommandBuffer> commandBuffers;
 
+	std::vector<Vertex> vertices;
+
 	void initWindow();
 	void initVulkan();
-	void mainLoop();
+
 	void cleanup();
 	void cleanupSwapChain();
 	 
@@ -238,7 +244,7 @@ private:
 	// TODO: SHOULDN'T ALLOCATE MEMORY FOR EVERY OBJECT INDIVIDUALLY - NEED TO IMPLEMENT ALLOCATOR
 	void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
 	void copyBuffer(VkBuffer srcBuff, VkBuffer targetBuff, VkDeviceSize size);
-	void createVertexBuffer();
+	//void createVertexBuffer();
 	void createIndexBuffer();
 	void createUniformBuffer(); // NOT MOST EFFICIENT WAY TODO: CHANGE TO PUSH CONSTANTS
 	void createDescriptorPool();
@@ -298,11 +304,26 @@ private:
 	const int HEIGHT = 600;
 
 public:
-	void run()
+
+	inline static std::shared_ptr<Application> get()
+	{
+		static std::shared_ptr<Application> instance(new Application());
+		return instance;
+	}
+
+	void init()
 	{
 		initWindow();
 		initVulkan();
-		mainLoop();
+	}
+
+	void mainLoop();
+
+	void createVertexBuffer(const std::vector<Vertex> vert);
+	void createConfig();
+
+	void clean()
+	{
 		cleanup();
 	}
 };

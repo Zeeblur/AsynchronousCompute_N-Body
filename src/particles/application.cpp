@@ -35,12 +35,18 @@ void Application::initVulkan()
 	createGraphicsPipeline();
 	createCommandPool();
 	createDepthResources();
-	createFramebuffers();
+	createFramebuffers();				// prepare
 	createTextureImage();
 	createTextureImageView();
 	createTextureSampler();
-	createVertexBuffer();
-	createIndexBuffer();
+
+	/// this needs to be configurable.
+
+}
+
+void Application::createConfig()
+{
+
 	createUniformBuffer();
 	createDescriptorPool();
 	createDescriptorSet();
@@ -48,13 +54,14 @@ void Application::initVulkan()
 	createSemaphores();
 }
 
+
 void Application::mainLoop()
 {
 	while (!glfwWindowShouldClose(window))
 	{
 		glfwPollEvents();
-		updateUniformBuffer();
-		drawFrame();
+		updateUniformBuffer();   // update
+		drawFrame();			 // render
 	}
 
 	vkDeviceWaitIdle(device);
@@ -101,8 +108,8 @@ void Application::cleanup()
 	vkDestroyBuffer(device, uniformBuffer, nullptr);
 	vkFreeMemory(device, uniformBufferMemory, nullptr);
 
-	vkDestroyBuffer(device, indexBuffer, nullptr);
-	vkFreeMemory(device, indexBufferMemory, nullptr);
+	//vkDestroyBuffer(device, indexBuffer, nullptr);
+	//vkFreeMemory(device, indexBufferMemory, nullptr);
 
 	vkDestroyBuffer(device, vertexBuffer, nullptr);
 	vkFreeMemory(device, vertexBufferMemory, nullptr);
@@ -997,8 +1004,23 @@ bool Application::hasStencilComponent(VkFormat format)
 
 
 // create vertex buffer objs
-void Application::createVertexBuffer()
+void Application::createVertexBuffer(const std::vector<Vertex> vert)
 {
+	//std::vector<Vertex> vertALL = vertices;
+
+	//for (int i = 0; i < vertices.size(); ++i)
+	//{
+	//	auto new_pos = vertices[i].pos;
+	//	new_pos.z = -0.5f;
+	//	vertALL.push_back(Vertex(new_pos, vertices[i].colour, vertices[i].texCoord));
+	//}
+
+
+	// two particles
+	//VkDeviceSize bufferSize = sizeof(vertALL[0]) * vertALL.size();
+
+	vertices = vert;
+
 	VkDeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
 
 	// create a staging buffer as a temp buffer and then the device has a local vertex  buffer.
@@ -1010,6 +1032,7 @@ void Application::createVertexBuffer()
 	void* data;
 	// map buffer memory to the cpu
 	vkMapMemory(device, stagingBufferMemory, 0, bufferSize, 0, &data);
+
 
 	// Copy vertex data into the mapped memory
 	memcpy(data, vertices.data(), (size_t)bufferSize);
@@ -1031,25 +1054,25 @@ void Application::createVertexBuffer()
 // create index buffer
 void Application::createIndexBuffer()
 {
-	// buffersize is the number of incides times the size of the index type (unit32/16)
-	VkDeviceSize bufferSize = sizeof(indices[0]) * indices.size();
+	//// buffersize is the number of incides times the size of the index type (unit32/16)
+	//VkDeviceSize bufferSize = sizeof(indices[0]) * indices.size();
 
-	VkBuffer stagingBuffer;
-	VkDeviceMemory stagingBufferMemory;
-	createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
+	//VkBuffer stagingBuffer;
+	//VkDeviceMemory stagingBufferMemory;
+	//createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
 
-	void* data;
-	vkMapMemory(device, stagingBufferMemory, 0, bufferSize, 0, &data);
-	memcpy(data, indices.data(), (size_t)bufferSize);
-	vkUnmapMemory(device, stagingBufferMemory);
+	//void* data;
+	//vkMapMemory(device, stagingBufferMemory, 0, bufferSize, 0, &data);
+	//memcpy(data, indices.data(), (size_t)bufferSize);
+	//vkUnmapMemory(device, stagingBufferMemory);
 
-	// note usage is INDEX buffer. 
-	createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, indexBuffer, indexBufferMemory);
+	//// note usage is INDEX buffer. 
+	//createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, indexBuffer, indexBufferMemory);
 
-	copyBuffer(stagingBuffer, indexBuffer, bufferSize);
+	//copyBuffer(stagingBuffer, indexBuffer, bufferSize);
 
-	vkDestroyBuffer(device, stagingBuffer, nullptr);
-	vkFreeMemory(device, stagingBufferMemory, nullptr);
+	//vkDestroyBuffer(device, stagingBuffer, nullptr);
+	//vkFreeMemory(device, stagingBufferMemory, nullptr);
 }
 
 // create uniform Buffer
@@ -1195,12 +1218,12 @@ void Application::createCommandBuffers()
 		vkCmdBindVertexBuffers(commandBuffers[i], 0, 1, vertexBuffers, offsets);
 
 		// bind index & uniforms
-		vkCmdBindIndexBuffer(commandBuffers[i], indexBuffer, 0, VK_INDEX_TYPE_UINT16);
+		//vkCmdBindIndexBuffer(commandBuffers[i], indexBuffer, 0, VK_INDEX_TYPE_UINT16);
 		vkCmdBindDescriptorSets(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSet, 0, nullptr);
 
 		// DRAW A TRIANGLEEEEE!!!?"!?!!?!?!?!?!?!
 		// vertex count, instance count, first vertex/ first instance. - used for offsets
-		vkCmdDrawIndexed(commandBuffers[i], static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
+		vkCmdDraw(commandBuffers[i], static_cast<uint32_t>(vertices.size()), 1, 0, 0);
 	
 		// end the pass
 		vkCmdEndRenderPass(commandBuffers[i]);

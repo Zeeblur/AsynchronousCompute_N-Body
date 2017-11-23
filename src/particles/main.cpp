@@ -1,12 +1,13 @@
 #include <iostream>
-#include "application.h"
+#include "nbody.h"
 
 int main() {
 
-	Application app;
+	nbody simulation;
 
-	try {
-		app.run();
+	try
+	{
+		simulation.run();
 	}
 	catch (const std::runtime_error& e)
 	{
