@@ -40,17 +40,34 @@ download_project(PROJ glm
 add_subdirectory(${glm_SOURCE_DIR} ${glm_BINARY_DIR})
 include_directories("${glm_SOURCE_DIR}")
 
+
+
 # add the exes
 # Add all files from a src folder
-file(GLOB_RECURSE SOURCES src/*.cpp src/*.h)
+file(GLOB_RECURSE SOURCES src/triangle/*.cpp src/triangle/*.h external/*.h)
 
 #file(GLOB_RECURSE SHADERS res/shaders/*.vert res/shaders/*.frag)
 
-add_executable(VulkanTest ${SOURCES})
-target_link_libraries (VulkanTest  ${EXTRA_LIBS})
+add_executable(vulkantest ${SOURCES})
+target_link_libraries (vulkantest  ${EXTRA_LIBS})
 
-add_custom_command(TARGET VulkanTest POST_BUILD
-  COMMAND ${CMAKE_COMMAND} -E copy_directory  "${PROJECT_SOURCE_DIR}/res" $<TARGET_FILE_DIR:VulkanTest>/res)
+add_custom_command(TARGET vulkantest POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E copy_directory  "${PROJECT_SOURCE_DIR}/res" $<TARGET_FILE_DIR:vulkantest>/res)
 
-target_link_libraries(VulkanTest glfw)
-target_link_libraries(VulkanTest vulkan-1)
+target_link_libraries(vulkantest glfw)
+target_link_libraries(vulkantest vulkan-1)
+target_include_directories(vulkantest PRIVATE external/)
+
+file(GLOB_RECURSE SOURCES2 src/particles/*.cpp src/particles/*.h external/*.h)
+
+#file(GLOB_RECURSE SHADERS res/shaders/*.vert res/shaders/*.frag)
+
+add_executable(particles ${SOURCES2})
+target_link_libraries (particles  ${EXTRA_LIBS})
+
+add_custom_command(TARGET particles POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E copy_directory  "${PROJECT_SOURCE_DIR}/res" $<TARGET_FILE_DIR:particles>/res)
+
+target_link_libraries(particles glfw)
+target_link_libraries(particles vulkan-1)
+target_include_directories(particles PRIVATE external/)

@@ -5,6 +5,8 @@ layout(location = 0) in vec3 inPos;
 layout(location = 1) in vec3 inColour;
 layout(location = 2) in vec2 inTexCoord;
 
+layout(location = 3) in vec3 instancePos;
+
 layout(location = 0) out vec3 fragColour;
 layout(location = 1) out vec2 fragTexCoord;
 
@@ -22,7 +24,7 @@ out gl_PerVertex
 
 void main()
 {
-    gl_Position =  ubo.proj * ubo.view * ubo.model * vec4(inPos, 1.0);
-    fragColour = inColour;
+    gl_Position =  ubo.proj * ubo.view * ubo.model * vec4((inPos + instancePos), 1.0);
+    fragColour = instancePos;
 	fragTexCoord = inTexCoord;
 }
