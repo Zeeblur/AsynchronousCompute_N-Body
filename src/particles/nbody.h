@@ -26,7 +26,7 @@ class nbody
 public:
 
 	// default num particles is 4
-	nbody(const unsigned int num_particles = 4);
+	nbody(const unsigned int num = 4);
 
 	~nbody();
 	

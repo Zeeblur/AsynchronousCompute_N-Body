@@ -3,9 +3,10 @@
 using namespace glm;
 
 // TODO: define vars for window/particles etc
-nbody::nbody(const unsigned int num_particles)
+nbody::nbody(const unsigned int num)
 {
 	// initialise the application
+	num_particles = num;
 	initialiseVulkan();
 }
 
@@ -19,15 +20,20 @@ void nbody::initialiseVulkan()
 
 void nbody::prepareParticles()
 {
-	particleBuffer = std::vector<particle>(num_particles);
+	particleBuffer.resize(num_particles);
 
 	// create positions for particles
-	for (size_t i = 0; i < num_particles; ++i)
+	for (auto &p : particleBuffer)
 	{
-		//particle p;
+		//set rnd position
+		auto v1 = rand() % 20;
+		v1 -= 10;
 
-		//p.pos = vec3::();
+		auto v2 = rand() % 10;
+		v2 -= 5;
 
+		p.pos = vec3(v1, v2, 0.0f);
+		
 	}
 }
 
@@ -35,8 +41,8 @@ void nbody::run()
 {
 	// loop here
 	prepareParticles();
-	createSphereGeom(20, 20, vec3(1.0));
-	Application::get()->setVertexData(vertexBuffer, indexBuffer);
+	createSphereGeom(20, 20, vec3(0.2));
+	Application::get()->setVertexData(vertexBuffer, indexBuffer, particleBuffer);
 
 	Application::get()->createConfig();
 	Application::get()->mainLoop();
@@ -45,7 +51,7 @@ void nbody::run()
 void nbody::createSphereGeom(const unsigned int stacks, const unsigned int slices, const glm::vec3 &dims)
 {
 
-	glm::vec3 colour = glm::vec3(0.7f, 0.7f, 0.7f);// 1.0f);
+	glm::vec3 colour = glm::vec3(0.7f, 0.7f, 0.7f);
 
 	// Working values
 	float delta_rho = glm::pi<float>() / static_cast<float>(stacks);
@@ -92,18 +98,6 @@ void nbody::createSphereGeom(const unsigned int stacks, const unsigned int slice
 				dims.y * cos(theta) * sin(rho + delta_rho),
 				dims.z * cos(rho + delta_rho));
 			coords[3] = glm::vec2(s, t - delta_T);
-
-
-
-			// Triangle 1
-			//vertexBuffer.push_back(Vertex(verts[0], colour, coords[0]));
-			//vertexBuffer.push_back(Vertex(verts[1], colour, coords[1]));
-			//vertexBuffer.push_back(Vertex(verts[2], colour, coords[2]));
-
-			//// tri 2
-			//vertexBuffer.push_back(Vertex(verts[1], colour, coords[1]));
-			//vertexBuffer.push_back(Vertex(verts[3], colour, coords[3]));
-			//vertexBuffer.push_back(Vertex(verts[2], colour, coords[2]));
 
 			//TODO: clean this up
 			vertexBuffer.push_back(Vertex(verts[0], colour, coords[0]));

@@ -13,6 +13,7 @@
 #include <fstream>
 #include <array>
 #include <memory>
+#include "particle.h"
 
 
 
@@ -130,6 +131,15 @@ struct UniformBufferObject
 	glm::mat4 proj;
 };
 
+enum bufferType
+{
+	VERTEX,
+	INDEX,
+	INSTANCE
+};
+
+struct BufferObject;
+
 class Application
 {
 private:
@@ -151,10 +161,8 @@ private:
 	VkCommandPool commandPool;
 	VkSemaphore imageAvailableSemaphore;
 	VkSemaphore renderFinishedSemaphore;
-	VkBuffer vertexBuffer;
-	VkDeviceMemory vertexBufferMemory;
-	VkBuffer indexBuffer;
-	VkDeviceMemory indexBufferMemory;
+
+
 	VkBuffer uniformBuffer;
 	VkDeviceMemory uniformBufferMemory;
 	VkDescriptorPool descriptorPool;
@@ -172,8 +180,7 @@ private:
 	std::vector<VkFramebuffer> swapChainFramebuffers;
 	std::vector<VkCommandBuffer> commandBuffers;
 
-	std::vector<Vertex> vertices;
-	std::vector<uint16_t> indices;
+
 
 	void initWindow();
 	void initVulkan();
@@ -204,6 +211,7 @@ private:
 	void createGraphicsPipeline();
 	void createFramebuffers();
 	void createCommandPool();
+	void createInstanceBuffer();
 
 	// texture stuff
 	void createTextureImage();
@@ -222,9 +230,12 @@ private:
 	VkFormat findSupportedFormat(const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features);
 	
 
+
+	BufferObject* buffers[3];//  { new VertexBO(), new IndexBO(), new InstanceBO(); };
+
+
+
 	// TODO: SHOULDN'T ALLOCATE MEMORY FOR EVERY OBJECT INDIVIDUALLY - NEED TO IMPLEMENT ALLOCATOR
-	void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
-	void copyBuffer(VkBuffer srcBuff, VkBuffer targetBuff, VkDeviceSize size);
 	void createVertexBuffer();
 	void createIndexBuffer();
 	void createUniformBuffer(); // NOT MOST EFFICIENT WAY TODO: CHANGE TO PUSH CONSTANTS
@@ -236,7 +247,6 @@ private:
 
 	void drawFrame();
 	void updateUniformBuffer();
-
 
 	// checks
 	bool checkValidationLayerSupport();
@@ -292,6 +302,10 @@ public:
 		return instance;
 	}
 
+	void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
+	void copyBuffer(VkBuffer srcBuff, VkBuffer targetBuff, VkDeviceSize size);
+
+
 	void init()
 	{
 		initWindow();
@@ -300,11 +314,154 @@ public:
 
 	void mainLoop();
 
-	void setVertexData(const std::vector<Vertex> vert, const std::vector<uint16_t> ind);
+	void setVertexData(const std::vector<Vertex> vert, const std::vector<uint16_t> ind, const std::vector<particle> part);
 	void createConfig();
 
 	void clean()
 	{
 		cleanup();
+	}
+};
+
+
+struct BufferObject
+{
+	VkDevice* dev;
+	VkBuffer buffer = VK_NULL_HANDLE;
+	VkDeviceMemory memory = VK_NULL_HANDLE;
+	size_t size = 0;
+
+	virtual void createBuffer() = 0;
+
+	~BufferObject()
+	{
+		vkDestroyBuffer(*dev, buffer, nullptr);
+		vkFreeMemory(*dev, memory, nullptr);
+	}
+};
+
+struct VertexBO : BufferObject
+{
+	std::vector<Vertex> vertices;
+	void createBuffer()
+	{
+		VkDeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
+		size = (size_t)bufferSize;
+
+		// create a staging buffer as a temp buffer and then the device has a local vertex  buffer.
+		VkBuffer stagingBuffer;
+		VkDeviceMemory stagingBufferMemory;
+		Application::get()->createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
+
+		// copy data to buffer
+		void* data;
+		// map buffer memory to the cpu
+		vkMapMemory(*dev, stagingBufferMemory, 0, bufferSize, 0, &data);
+
+
+		// Copy vertex data into the mapped memory
+		memcpy(data, vertices.data(), size);
+
+		// unmap buffer
+		vkUnmapMemory(*dev, stagingBufferMemory);
+
+		// create vertex buffer
+		Application::get()->createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, buffer, memory);
+
+		// local so can't use map., so have to copy data between buffers.
+		Application::get()->copyBuffer(stagingBuffer, buffer, bufferSize);
+
+		// clean up staging buffer
+		vkDestroyBuffer(*dev, stagingBuffer, nullptr);
+		vkFreeMemory(*dev, stagingBufferMemory, nullptr);
+	}
+};
+
+struct IndexBO : BufferObject
+{
+	std::vector<uint16_t> indices;
+
+	void createBuffer()
+	{
+
+		// buffersize is the number of incides times the size of the index type (unit32/16)
+		VkDeviceSize bufferSize = sizeof(indices[0]) * indices.size();
+		size = indices.size();
+
+		VkBuffer stagingBuffer;
+		VkDeviceMemory stagingBufferMemory;
+		Application::get()->createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
+
+		void* data;
+		vkMapMemory(*dev, stagingBufferMemory, 0, bufferSize, 0, &data);
+		memcpy(data, indices.data(), (size_t)bufferSize);
+		vkUnmapMemory(*dev, stagingBufferMemory);
+
+		// note usage is INDEX buffer. 
+		Application::get()->createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, buffer, memory);
+
+		Application::get()->copyBuffer(stagingBuffer, buffer, bufferSize);
+		 
+		vkDestroyBuffer(*dev, stagingBuffer, nullptr);
+		vkFreeMemory(*dev, stagingBufferMemory, nullptr);
+	}
+};
+
+struct InstanceBO : BufferObject
+{
+	std::vector<particle> particles;
+	void createBuffer()
+	{
+
+		// buffersize is the number of incides times the size of the index type (unit32/16)
+		VkDeviceSize bufferSize = sizeof(particles[0]) * particles.size();
+		size = particles.size();
+
+		VkBuffer stagingBuffer;
+		VkDeviceMemory stagingBufferMemory;
+		Application::get()->createBuffer(bufferSize,
+			VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+			stagingBuffer,
+			stagingBufferMemory);
+
+		void* data; 
+		vkMapMemory(*dev, stagingBufferMemory, 0, bufferSize, 0, &data);
+		memcpy(data, particles.data(), (size_t)bufferSize);
+		vkUnmapMemory(*dev, stagingBufferMemory);
+
+		// note usage is INDEX buffer. 
+		Application::get()->createBuffer(bufferSize,
+			VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 
+			buffer,
+			memory); 
+
+		Application::get()->copyBuffer(stagingBuffer, buffer, bufferSize);
+
+		vkDestroyBuffer(*dev, stagingBuffer, nullptr);
+		vkFreeMemory(*dev, stagingBufferMemory, nullptr);
+	}
+
+	static VkVertexInputBindingDescription getBindingDescription()
+	{
+		VkVertexInputBindingDescription vInputBindDescription{};
+		vInputBindDescription.binding = 1;   // bind this to 1 (vertex is 0)
+		vInputBindDescription.stride = sizeof(particle);
+		vInputBindDescription.inputRate = VK_VERTEX_INPUT_RATE_INSTANCE;
+		return vInputBindDescription;
+	}
+
+	static VkVertexInputAttributeDescription getAttributeDescription()
+	{
+		// 1 attributes (position)
+		VkVertexInputAttributeDescription attributeDesc;
+
+		attributeDesc.binding = 1; // which binding (the only one created above)
+		attributeDesc.location = 3; // which location of the vertex shader
+		attributeDesc.format = VK_FORMAT_R32G32B32_SFLOAT; // format as a vector 3 (3floats)
+		attributeDesc.offset = 0;// sizeof(float) * 3;// offsetof(particle, pos); // calculate the offset within each Vertex
+
+		return attributeDesc;
 	}
 };
