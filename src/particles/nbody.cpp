@@ -26,12 +26,11 @@ void nbody::prepareParticles()
 	for (auto &p : particleBuffer)
 	{
 		//set rnd position
-		auto v1 = rand() % 20;
+		float v1 = static_cast <float> (rand()) / (static_cast <float> (RAND_MAX / 20));
 		v1 -= 10;
 
-		auto v2 = rand() % 10;
-		v2 -= 5;
-
+		auto v2 = static_cast <float> (rand()) / (static_cast <float> (RAND_MAX / 20));
+		v2 -= 10;
 		p.pos = vec3(v1, v2, 0.0f);
 		
 	}
