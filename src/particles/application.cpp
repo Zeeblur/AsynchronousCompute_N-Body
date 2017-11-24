@@ -1792,7 +1792,7 @@ VkExtent2D Application::chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabil
 	}
 }
 
-void Application::setVertexData(const std::vector<Vertex>& vert, const std::vector<uint16_t>& ind)
+void Application::setVertexData(const std::vector<Vertex> vert, const std::vector<uint16_t> ind)
 {
 	// copy data
 	vertices = vert;

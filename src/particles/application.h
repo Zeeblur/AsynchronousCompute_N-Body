@@ -300,7 +300,7 @@ public:
 
 	void mainLoop();
 
-	void setVertexData(const std::vector<Vertex>& vert, const std::vector<uint16_t>& ind);
+	void setVertexData(const std::vector<Vertex> vert, const std::vector<uint16_t> ind);
 	void createConfig();
 
 	void clean()

@@ -35,7 +35,7 @@ void nbody::run()
 {
 	// loop here
 	prepareParticles();
-
+	createSphereGeom(20, 20, vec3(1.0));
 	Application::get()->setVertexData(vertexBuffer, indexBuffer);
 
 	Application::get()->createConfig();
@@ -109,14 +109,14 @@ void nbody::createSphereGeom(const unsigned int stacks, const unsigned int slice
 			vertexBuffer.push_back(Vertex(verts[0], colour, coords[0]));
 			vertexBuffer.push_back(Vertex(verts[1], colour, coords[1]));
 			vertexBuffer.push_back(Vertex(verts[2], colour, coords[2]));
-			vertexBuffer.push_back(Vertex(verts[0], colour, coords[3]));
+			vertexBuffer.push_back(Vertex(verts[3], colour, coords[3]));
 
-			indexBuffer.push_back(ind += 0);
-			indexBuffer.push_back(ind += 1);
-			indexBuffer.push_back(ind += 2);
-			indexBuffer.push_back(ind += 1);
-			indexBuffer.push_back(ind += 3);
-			indexBuffer.push_back(ind += 2);
+			indexBuffer.push_back(ind + 0);
+			indexBuffer.push_back(ind + 1);
+			indexBuffer.push_back(ind + 2);
+			indexBuffer.push_back(ind + 1);
+			indexBuffer.push_back(ind + 3);
+			indexBuffer.push_back(ind + 2);
 
 			ind += 4;
 		}
