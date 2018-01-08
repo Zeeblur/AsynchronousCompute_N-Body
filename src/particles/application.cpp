@@ -1447,19 +1447,18 @@ void Application::endSingleTimeCommands(VkCommandBuffer commandBuffer) {
 }
 
 void Application::updateUniformBuffer()
-{
-	static auto startTime = std::chrono::high_resolution_clock::now();
+{ 
+	static auto startTime = std::chrono::high_resolution_clock::now();  
 
 	auto currentTime = std::chrono::high_resolution_clock::now();
 	float time = std::chrono::duration_cast<std::chrono::milliseconds>(currentTime - startTime).count() / 1000.0f;
 
-	UniformBufferObject ubo = {};
-	ubo.model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+	UniformBufferObject ubo = {}; 
+	ubo.model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f));
 	ubo.view = glm::lookAt(glm::vec3(0.0f, 0.0f, -20.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
 	ubo.proj = glm::perspective(glm::radians(45.0f), swapChainExtent.width / (float)swapChainExtent.height, 0.1f, 10000.0f);
-	//ubo.proj[1][1] *= -1;  // winding order is anti-clockwise
 
-	void* data;
+	void* data;  
 	vkMapMemory(device, uniformBufferMemory, 0, sizeof(ubo), 0, &data);
 	memcpy(data, &ubo, sizeof(ubo));
 	vkUnmapMemory(device, uniformBufferMemory);
@@ -1729,8 +1728,9 @@ VkPresentModeKHR Application::chooseSwapPresentMode(const std::vector<VkPresentM
 	// blocks application when display queue is full (double buffering)
 	VkPresentModeKHR bestMode = VK_PRESENT_MODE_FIFO_KHR;
 
-	for (const auto& availablePresentMode : availablePresentModes) {
-
+	for (const auto& availablePresentMode : availablePresentModes)
+	{
+		 
 		// triple buffering!! - avoid tearing less than std vsync. 
 		// doesn't block app when queue is full, the images are replaced with newer ones. (Frames = images)
 		if (availablePresentMode == VK_PRESENT_MODE_MAILBOX_KHR)
@@ -1743,7 +1743,7 @@ VkPresentModeKHR Application::chooseSwapPresentMode(const std::vector<VkPresentM
 		{
 			bestMode = availablePresentMode;
 		}
-		
+		   
 	}
 
 	return bestMode;

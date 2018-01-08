@@ -24,7 +24,11 @@ out gl_PerVertex
 
 void main()
 {
-    gl_Position =  ubo.proj * ubo.view * ubo.model * vec4((inPos + instancePos), 1.0);
+	vec3 v = instancePos;
+	mat4 m = mat4(1.0);// vec4(inPos + instancePos, 1.0));
+	m[3] = m[0] * v[0] + m[1] * v[1] + m[2] * v[2] + m[3];
+	mat4 model = m * ubo.model;
+    gl_Position = (ubo.proj * ubo.view * model) * vec4(inPos, 1.0);
     fragColour = instancePos;
 	fragTexCoord = inTexCoord;
 }
