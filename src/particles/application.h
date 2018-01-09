@@ -140,6 +140,9 @@ enum bufferType
 
 struct BufferObject;
 
+// Resources for the compute part of the example
+struct ComputeConfig;
+
 class Application
 {
 private:
@@ -163,6 +166,29 @@ private:
 	VkSemaphore renderFinishedSemaphore;
 
 
+	struct ComputeConfig
+	{
+		BufferObject* storageBuffer;					// (Shader) storage buffer object containing the particles
+		BufferObject* uniformBuffer;		    // Uniform buffer object containing particle system parameters
+		VkQueue queue;								// Separate queue for compute commands (queue family may differ from the one used for graphics)
+		VkCommandPool commandPool;					// Use a separate command pool (queue family may differ from the one used for graphics)
+		VkCommandBuffer commandBuffer;				// Command buffer storing the dispatch commands and barriers
+		VkFence fence;								// Synchronization fence to avoid rewriting compute CB if still in use
+		VkDescriptorSetLayout descriptorSetLayout;	// Compute shader binding layout
+		VkDescriptorSet descriptorSet;				// Compute shader bindings
+		VkPipelineLayout pipelineLayout;			// Layout of the compute pipeline
+		VkPipeline pipeline;						// Compute pipeline for updating particle positions
+
+													// Compute shader uniform block object
+		struct computeUBO
+		{
+			float deltaT;							//		Frame delta time
+			float destX;							//		x position of the attractor
+			float destY;							//		y position of the attractor
+			int32_t particleCount = 0;
+		} ubo;
+	} compute;
+
 	VkBuffer uniformBuffer;
 	VkDeviceMemory uniformBufferMemory;
 	VkDescriptorPool descriptorPool;
@@ -180,6 +206,13 @@ private:
 	std::vector<VkFramebuffer> swapChainFramebuffers;
 	std::vector<VkCommandBuffer> commandBuffers;
 
+	// to hold the indicies of the queue families
+	struct
+	{
+		uint32_t graphics;
+		uint32_t compute;
+		uint32_t present;
+	} queueFamilyIndices;
 
 
 	void initWindow();
@@ -213,6 +246,8 @@ private:
 	void createCommandPool();
 	void createInstanceBuffer();
 
+
+
 	// texture stuff
 	void createTextureImage();
 	void createImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory);
@@ -229,13 +264,8 @@ private:
 	VkFormat findDepthFormat();
 	VkFormat findSupportedFormat(const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features);
 	
-
-
 	BufferObject* buffers[3];//  { new VertexBO(), new IndexBO(), new InstanceBO(); };
 
-
-
-	// TODO: SHOULDN'T ALLOCATE MEMORY FOR EVERY OBJECT INDIVIDUALLY - NEED TO IMPLEMENT ALLOCATOR
 	void createVertexBuffer();
 	void createIndexBuffer();
 	void createUniformBuffer(); // NOT MOST EFFICIENT WAY TODO: CHANGE TO PUSH CONSTANTS
@@ -243,6 +273,7 @@ private:
 	void createDescriptorSet();
 
 	void createCommandBuffers();
+	void buildComputeCommandBuffer();
 	void createSemaphores();
 
 	void drawFrame();
@@ -260,6 +291,7 @@ private:
 
 	// find queues
 	QueueFamilyIndices findQueuesFamilies(VkPhysicalDevice device);
+	int findComputeQueueFamily(VkPhysicalDevice device);
 
 	SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice device);
 	VkSurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats);
@@ -294,6 +326,8 @@ private:
 	const int WIDTH = 800;
 	const int HEIGHT = 600;
 
+	void prepareCompute();
+
 public:
 
 	inline static std::shared_ptr<Application> get()
@@ -315,7 +349,8 @@ public:
 	void mainLoop();
 
 	void setVertexData(const std::vector<Vertex> vert, const std::vector<uint16_t> ind, const std::vector<particle> part);
-	void createConfig();
+	void createConfig(int pCount);
+	int PARTICLE_COUNT = 0;
 
 	void clean()
 	{

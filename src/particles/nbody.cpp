@@ -43,7 +43,9 @@ void nbody::run()
 	createSphereGeom(20, 20, vec3(0.2));
 	Application::get()->setVertexData(vertexBuffer, indexBuffer, particleBuffer);
 
-	Application::get()->createConfig();
+	// create config sets up the storage buffers for the data and uniforms. 
+	// creates the descriptions and command buffers.
+	Application::get()->createConfig(num_particles);
 	Application::get()->mainLoop();
 }
 

@@ -22,7 +22,7 @@ class nbody
 
 	void createSphereGeom(const unsigned int stacks, const unsigned int slices, const glm::vec3 &dims);
 
-	unsigned int num_particles = 0;
+
 public:
 
 	// default num particles is 4
@@ -33,5 +33,8 @@ public:
 	void prepareParticles();
 
 	void run();
+
+
+	unsigned int num_particles = 0;
 
 };
