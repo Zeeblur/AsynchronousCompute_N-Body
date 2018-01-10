@@ -40,7 +40,7 @@ void nbody::run()
 {
 	// loop here
 	prepareParticles();
-	createSphereGeom(20, 20, vec3(0.2));
+	createSphereGeom(20, 20, vec3(0.2f));
 	Application::get()->setVertexData(vertexBuffer, indexBuffer, particleBuffer);
 
 	// create config sets up the storage buffers for the data and uniforms. 

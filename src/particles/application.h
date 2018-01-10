@@ -138,7 +138,7 @@ enum bufferType
 	INSTANCE
 };
 
-struct BufferObject;
+struct BufferObject; // forward declare
 
 // Resources for the compute part of the example
 struct ComputeConfig;

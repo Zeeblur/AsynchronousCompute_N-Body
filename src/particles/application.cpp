@@ -241,13 +241,13 @@ void Application::pickPhysicalDevice()
 	if (deviceCount == 0)
 		throw std::runtime_error("Failed to find GPU with Vulkan support!");
 
-	for (const auto& device : devices)
+	for (const auto& dev : devices)
 	{
 		std::cout << "checking device" << std::endl;
 
-		if (isDeviceSuitable(device)) 
+		if (isDeviceSuitable(dev)) 
 		{
-			physicalDevice = device;
+			physicalDevice = dev;
 			break;
 		}
 	}
@@ -280,6 +280,10 @@ void Application::createLogicalDevice()
 		VkDeviceQueueCreateInfo qCreateInfo;
 		qCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
 		
+		// need to ensure these are null so no garbage
+		qCreateInfo.flags = 0;
+		qCreateInfo.pNext = NULL;
+
 		// this is either graphics/surface etc
 		qCreateInfo.queueFamilyIndex = queueFam;
 
@@ -1977,12 +1981,27 @@ void Application::prepareCompute()
 	vkUpdateDescriptorSets(device, static_cast<uint32_t>(computeWriteDescriptorSets.size()), computeWriteDescriptorSets.data(), 0, NULL);
 
 	// Create pipeline
+
+	// create shader module
+	auto computeShaderCode = readFile("res/shaders/comp.spv");
+
+	// modules only needed in creation of pipeline so can be destroyed locally
+	VkShaderModule computeShaderMod = createShaderModule(computeShaderCode);
+
+	// assign the shaders
+	VkPipelineShaderStageCreateInfo compShaderStageInfo = {};
+	compShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	compShaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
+	compShaderStageInfo.module = computeShaderMod;
+	compShaderStageInfo.pName = "main";		// function to invoke
+
+
 	// create info for pipeline setting shader
 	VkComputePipelineCreateInfo computePipelineCreateInfo{};
 	computePipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
 	computePipelineCreateInfo.layout = compute.pipelineLayout;
 	computePipelineCreateInfo.flags = 0;
-	computePipelineCreateInfo.stage = loadShader("shaders/computeparticles/particle.comp.spv", VK_SHADER_STAGE_COMPUTE_BIT);
+	computePipelineCreateInfo.stage = compShaderStageInfo;
 	
 	// create it
 	if(vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &computePipelineCreateInfo, nullptr, &compute.pipeline) != VK_SUCCESS)
