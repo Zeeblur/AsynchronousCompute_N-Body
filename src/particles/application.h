@@ -166,10 +166,12 @@ private:
 	VkSemaphore renderFinishedSemaphore;
 
 
+	VkPipelineCache pipeCache;
+
 	struct ComputeConfig
 	{
 		BufferObject* storageBuffer;					// (Shader) storage buffer object containing the particles
-		VkBuffer* uniformBuffer;		    // Uniform buffer object containing particle system parameters
+		VkBuffer uniformBuffer;		    // Uniform buffer object containing particle system parameters
 		VkQueue queue;								// Separate queue for compute commands (queue family may differ from the one used for graphics)
 		VkCommandPool commandPool;					// Use a separate command pool (queue family may differ from the one used for graphics)
 		VkCommandBuffer commandBuffer;				// Command buffer storing the dispatch commands and barriers
@@ -179,6 +181,11 @@ private:
 		VkPipelineLayout pipelineLayout;			// Layout of the compute pipeline
 		VkPipeline pipeline;						// Compute pipeline for updating particle positions
 
+
+
+		// memory for ubo
+		VkDeviceMemory uboMem;
+		void* mapped = nullptr;
 													// Compute shader uniform block object
 		struct computeUBO
 		{
@@ -188,6 +195,9 @@ private:
 			int32_t particleCount = 0;
 		} ubo;
 	} compute;
+
+	void createComputeUBO();
+	void updateCompute();
 
 	VkBuffer uniformBuffer;
 	VkDeviceMemory uniformBufferMemory;

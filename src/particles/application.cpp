@@ -75,6 +75,7 @@ void Application::mainLoop()
 		glfwPollEvents();
 		updateUniformBuffer();   // update
 		drawFrame();			 // render
+		updateCompute();
 	}
 
 	vkDeviceWaitIdle(device);
@@ -93,8 +94,6 @@ void Application::cleanupSwapChain()
 	}
 
 	vkFreeCommandBuffers(device, commandPool, static_cast<uint32_t>(commandBuffers.size()), commandBuffers.data());
-
-	vkFreeCommandBuffers(device, compute.commandPool, static_cast<uint32_t>(1), &compute.commandBuffer);
 
 	vkDestroyPipeline(device, graphicsPipeline, nullptr);
 	vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
@@ -136,7 +135,10 @@ void Application::cleanup()
 	vkDestroyPipelineLayout(device, compute.pipelineLayout, nullptr);
 	vkDestroyDescriptorSetLayout(device, compute.descriptorSetLayout, nullptr);
 	vkDestroyPipeline(device, compute.pipeline, nullptr);
+	vkFreeCommandBuffers(device, compute.commandPool, static_cast<uint32_t>(1), &compute.commandBuffer);
 	vkDestroyCommandPool(device, compute.commandPool, nullptr);
+	vkDestroyBuffer(device, compute.uniformBuffer, nullptr);
+	vkFreeMemory(device, compute.uboMem, nullptr);
 
 	vkDestroySemaphore(device, renderFinishedSemaphore, nullptr);
 	vkDestroySemaphore(device, imageAvailableSemaphore, nullptr);
@@ -805,7 +807,7 @@ void Application::createGraphicsPipeline()
 
 	
 	// create the pipeline!
-	if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &graphicsPipeline) != VK_SUCCESS)
+	if (vkCreateGraphicsPipelines(device, pipeCache, 1, &pipelineInfo, nullptr, &graphicsPipeline) != VK_SUCCESS)
 		throw std::runtime_error("Couldn't create graphics pipeline!");
 
 
@@ -1338,7 +1340,7 @@ void Application::drawFrame()
 	}
 
 	// wait until presentation is finished before drawing the next frame
-	vkQueueWaitIdle(presentQueue);
+	vkQueueWaitIdle(presentQueue);  
 
 	// Submit compute commands
 	vkWaitForFences(device, 1, &compute.fence, VK_TRUE, UINT64_MAX);
@@ -1886,7 +1888,7 @@ void Application::buildComputeCommandBuffer()
 	bufferBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 	bufferBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 	bufferBarrier.buffer = buffers[INSTANCE]->buffer;
-	//bufferBarrier.size = compute.storageBuffer->descriptor.range;
+	bufferBarrier.size = VK_WHOLE_SIZE;
 	bufferBarrier.srcAccessMask = VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT;						// Vertex shader invocations have finished reading from the buffer
 	bufferBarrier.dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT;								// Compute shader wants to write to the buffer
 																							// Compute and graphics queue may have different queue families (see VulkanDevice::createLogicalDevice)
@@ -1907,14 +1909,14 @@ void Application::buildComputeCommandBuffer()
 	vkCmdBindDescriptorSets(compute.commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, compute.pipelineLayout, 0, 1, &compute.descriptorSet, 0, 0);
 
 	// Dispatch the compute job
-	vkCmdDispatch(compute.commandBuffer, PARTICLE_COUNT / 256, 1, 1);
+	vkCmdDispatch(compute.commandBuffer, PARTICLE_COUNT/256, 1, 1);    
 
 	// Add memory barrier to ensure that compute shader has finished writing to the buffer
 	// Without this the (rendering) vertex shader may display incomplete results (partial data from last frame) 
 	bufferBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;								// Compute shader has finished writes to the buffer
 	bufferBarrier.dstAccessMask = VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT;						// Vertex shader invocations want to read from the buffer
 	bufferBarrier.buffer = buffers[INSTANCE]->buffer;
-	//bufferBarrier.size = compute.storageBuffer.descriptor.range;
+	bufferBarrier.size = VK_WHOLE_SIZE;
 	// Compute and graphics queue may have different queue families (see VulkanDevice::createLogicalDevice)
 	// For the barrier to work across different queues, we need to set their family indices
 	bufferBarrier.srcQueueFamilyIndex = queueFamilyIndices.compute;			// Required as compute and graphics queue may have different families
@@ -1932,8 +1934,22 @@ void Application::buildComputeCommandBuffer()
 	vkEndCommandBuffer(compute.commandBuffer);
 }
 
+void Application::createComputeUBO()
+{
+	compute.ubo.particleCount = PARTICLE_COUNT;
+	compute.ubo.deltaT = 0.016f;
+	compute.ubo.destX = 0.5f;
+	compute.ubo.destY = 0.0f;
+
+	VkDeviceSize bufferSize = sizeof(ComputeConfig::computeUBO);
+	createBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+		compute.uniformBuffer, compute.uboMem);  // buffer pointer and memory
+}
+
 void Application::prepareCompute()
 {
+	createComputeUBO();
+
 	// get compute capable device queue
 	int queueIndex = findComputeQueueFamily(physicalDevice);
 	// store value
@@ -1987,8 +2003,8 @@ void Application::prepareCompute()
 	allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
 	allocInfo.descriptorPool = descriptorPool;
 	allocInfo.pSetLayouts = &compute.descriptorSetLayout;
-	allocInfo.descriptorSetCount = 1;
-
+	allocInfo.descriptorSetCount = 1; 
+	 
 	// create allocation
 	if(vkAllocateDescriptorSets(device, &allocInfo, &compute.descriptorSet) != VK_SUCCESS)
 		throw std::runtime_error("Failed to allocate descriptor set for compute");
@@ -2001,12 +2017,11 @@ void Application::prepareCompute()
 	bufferInfo.offset = 0;
 	bufferInfo.range = sizeof(particle);
 
-	compute.uniformBuffer = &uniformBuffer;
 
 	VkDescriptorBufferInfo UBI = {};
-	UBI.buffer = *compute.uniformBuffer;
+	UBI.buffer = compute.uniformBuffer;
 	UBI.offset = 0;
-	UBI.range = sizeof(UniformBufferObject);
+	UBI.range = sizeof(ComputeConfig::computeUBO);
 
 	// Binding 0 : Particle position storage buffer
 	VkWriteDescriptorSet storageDesc{};
@@ -2055,7 +2070,7 @@ void Application::prepareCompute()
 	computePipelineCreateInfo.stage = compShaderStageInfo;
 	
 	// create it
-	if(vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &computePipelineCreateInfo, nullptr, &compute.pipeline) != VK_SUCCESS)
+	if(vkCreateComputePipelines(device, pipeCache, 1, &computePipelineCreateInfo, nullptr, &compute.pipeline) != VK_SUCCESS)
 		throw std::runtime_error("failed creating compute pipeline");
 
 	// Separate command pool as queue family for compute may be different than graphics
@@ -2087,4 +2102,14 @@ void Application::prepareCompute()
 
 	// Build a single command buffer containing the compute dispatch commands
 	buildComputeCommandBuffer();
+}
+
+void Application::updateCompute()
+{
+	compute.ubo.deltaT = 0.2f;
+	compute.ubo.destX = 0.75f;
+	compute.ubo.destY = 0.0f;
+	vkMapMemory(device, compute.uboMem, 0, sizeof(compute.ubo), 0, &compute.mapped);
+	memcpy(compute.mapped, &compute.ubo, sizeof(compute.ubo));
+	vkUnmapMemory(device, compute.uboMem);
 }

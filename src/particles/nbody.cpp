@@ -6,7 +6,7 @@ using namespace glm;
 nbody::nbody(const unsigned int num)
 {
 	// initialise the application
-	num_particles = num;
+	num_particles = num; 
 	initialiseVulkan();
 }
 
@@ -32,6 +32,8 @@ void nbody::prepareParticles()
 		auto v2 = static_cast <float> (rand()) / (static_cast <float> (RAND_MAX / 20));
 		v2 -= 10;
 		p.pos = vec3(v1, v2, 0.0f);
+
+	//	p.pos = vec3(0.0, 0.0, 0.0f);
 		
 	}
 }

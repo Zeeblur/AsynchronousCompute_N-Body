@@ -15,8 +15,6 @@ layout(std140, binding = 0) buffer Pos
    particle particles[ ];
 };
 
-layout (local_size_x = 256) in;
-
 layout (binding = 1) uniform UBO 
 {
 	float deltaT;
@@ -44,10 +42,11 @@ vec2 repulsion(vec2 pos, vec2 attractPos)
 
 void main() 
 {
+/*
     // Current SSBO index
     uint index = gl_GlobalInvocationID.x;
 	// Don't try to write beyond particle count
-    if (index >= ubo.particleCount) 
+    if (index >= 4096) 
 		return;	
 
     // Read position and velocity
@@ -70,9 +69,8 @@ void main()
     	particles[index].pos.xy = vPos;
 
     // Write back
-    particles[index].vel.xy = vVel;
-	particles[index].pos.x = 0;
-	particles[index].pos.y = 0;
-	particles[index].pos.z = 0;
+    particles[index].vel.xy = vVel; */
+	particles[gl_GlobalInvocationID.x].pos = vec3(0.0, 1.0, 1.0);
+
 }
 
