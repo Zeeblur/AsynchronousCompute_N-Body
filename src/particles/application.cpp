@@ -1888,7 +1888,7 @@ void Application::buildComputeCommandBuffer()
 	bufferBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 	bufferBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 	bufferBarrier.buffer = buffers[INSTANCE]->buffer;
-	bufferBarrier.size = VK_WHOLE_SIZE;
+	//bufferBarrier.size = VK_WHOLE_SIZE;
 	bufferBarrier.srcAccessMask = VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT;						// Vertex shader invocations have finished reading from the buffer
 	bufferBarrier.dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT;								// Compute shader wants to write to the buffer
 																							// Compute and graphics queue may have different queue families (see VulkanDevice::createLogicalDevice)
@@ -1909,14 +1909,14 @@ void Application::buildComputeCommandBuffer()
 	vkCmdBindDescriptorSets(compute.commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, compute.pipelineLayout, 0, 1, &compute.descriptorSet, 0, 0);
 
 	// Dispatch the compute job
-	vkCmdDispatch(compute.commandBuffer, PARTICLE_COUNT/256, 1, 1);    
+	vkCmdDispatch(compute.commandBuffer, 2, 1, 1);
 
 	// Add memory barrier to ensure that compute shader has finished writing to the buffer
 	// Without this the (rendering) vertex shader may display incomplete results (partial data from last frame) 
 	bufferBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;								// Compute shader has finished writes to the buffer
 	bufferBarrier.dstAccessMask = VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT;						// Vertex shader invocations want to read from the buffer
 	bufferBarrier.buffer = buffers[INSTANCE]->buffer;
-	bufferBarrier.size = VK_WHOLE_SIZE;
+	//bufferBarrier.size = VK_WHOLE_SIZE;
 	// Compute and graphics queue may have different queue families (see VulkanDevice::createLogicalDevice)
 	// For the barrier to work across different queues, we need to set their family indices
 	bufferBarrier.srcQueueFamilyIndex = queueFamilyIndices.compute;			// Required as compute and graphics queue may have different families

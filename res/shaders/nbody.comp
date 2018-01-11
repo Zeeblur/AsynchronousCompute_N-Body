@@ -71,6 +71,6 @@ void main()
     // Write back
     particles[index].vel.xy = vVel; */
 	particles[gl_GlobalInvocationID.x].pos = vec3(0.0, 1.0, 1.0);
-
+	particles[gl_GlobalInvocationID.y].pos = vec3(0.0, 1.0, 1.0);
 }
 
