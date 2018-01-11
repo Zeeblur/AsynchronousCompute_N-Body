@@ -169,7 +169,7 @@ private:
 	struct ComputeConfig
 	{
 		BufferObject* storageBuffer;					// (Shader) storage buffer object containing the particles
-		BufferObject* uniformBuffer;		    // Uniform buffer object containing particle system parameters
+		VkBuffer* uniformBuffer;		    // Uniform buffer object containing particle system parameters
 		VkQueue queue;								// Separate queue for compute commands (queue family may differ from the one used for graphics)
 		VkCommandPool commandPool;					// Use a separate command pool (queue family may differ from the one used for graphics)
 		VkCommandBuffer commandBuffer;				// Command buffer storing the dispatch commands and barriers
@@ -268,7 +268,7 @@ private:
 
 	void createVertexBuffer();
 	void createIndexBuffer();
-	void createUniformBuffer(); // NOT MOST EFFICIENT WAY TODO: CHANGE TO PUSH CONSTANTS
+	void createUniformBuffer();
 	void createDescriptorPool();
 	void createDescriptorSet();
 

@@ -1947,13 +1947,18 @@ void Application::prepareCompute()
 	if(vkAllocateDescriptorSets(device, &allocInfo, &compute.descriptorSet) != VK_SUCCESS)
 		throw std::runtime_error("Failed to allocate descriptor set for compute");
 
+	// create buffers.
+	compute.storageBuffer = buffers[INSTANCE];
+
 	VkDescriptorBufferInfo bufferInfo = {};
 	bufferInfo.buffer = compute.storageBuffer->buffer;
 	bufferInfo.offset = 0;
 	bufferInfo.range = sizeof(particle);
 
+	compute.uniformBuffer = &uniformBuffer;
+
 	VkDescriptorBufferInfo UBI = {};
-	UBI.buffer = compute.uniformBuffer->buffer;
+	UBI.buffer = *compute.uniformBuffer;
 	UBI.offset = 0;
 	UBI.range = sizeof(UniformBufferObject);
 
@@ -1991,7 +1996,7 @@ void Application::prepareCompute()
 	// assign the shaders
 	VkPipelineShaderStageCreateInfo compShaderStageInfo = {};
 	compShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-	compShaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
+	compShaderStageInfo.stage = VK_SHADER_STAGE_COMPUTE_BIT;
 	compShaderStageInfo.module = computeShaderMod;
 	compShaderStageInfo.pName = "main";		// function to invoke
 
