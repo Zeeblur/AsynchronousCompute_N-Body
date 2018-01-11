@@ -465,9 +465,9 @@ struct InstanceBO : BufferObject
 		memcpy(data, particles.data(), (size_t)bufferSize);
 		vkUnmapMemory(*dev, stagingBufferMemory);
 
-		// note usage is INDEX buffer. 
+		// note usage is INDEX buffer. and storage for compute
 		Application::get()->createBuffer(bufferSize,
-			VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+			VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
 			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 
 			buffer,
 			memory); 
@@ -487,15 +487,22 @@ struct InstanceBO : BufferObject
 		return vInputBindDescription;
 	}
 
-	static VkVertexInputAttributeDescription getAttributeDescription()
+	static std::array<VkVertexInputAttributeDescription, 2> getAttributeDescription()
 	{
 		// 1 attributes (position)
-		VkVertexInputAttributeDescription attributeDesc;
+		std::array<VkVertexInputAttributeDescription, 2> attributeDesc;
 
-		attributeDesc.binding = 1; // which binding (the only one created above)
-		attributeDesc.location = 3; // which location of the vertex shader
-		attributeDesc.format = VK_FORMAT_R32G32B32_SFLOAT; // format as a vector 3 (3floats)
-		attributeDesc.offset = 0;// sizeof(float) * 3;// offsetof(particle, pos); // calculate the offset within each Vertex
+		attributeDesc[0].binding = 1; // which binding (the only one created above)
+		attributeDesc[0].location = 3; // which location of the vertex shader
+		attributeDesc[0].format = VK_FORMAT_R32G32B32_SFLOAT; // format as a vector 3 (3floats)
+		attributeDesc[0].offset = offsetof(particle, pos); // calculate the offset within each Vertex
+
+
+		// Location 2 : Velocity
+		attributeDesc[1].binding = 1; // which binding (the only one created above)
+		attributeDesc[1].location = 4; // which location of the vertex shader
+		attributeDesc[1].format = VK_FORMAT_R32G32B32_SFLOAT; // format as a vector 3 (3floats)
+		attributeDesc[1].offset = offsetof(particle, vel); // calculate the offset within each Vertex
 
 		return attributeDesc;
 	}

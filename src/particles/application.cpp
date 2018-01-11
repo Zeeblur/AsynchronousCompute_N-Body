@@ -62,7 +62,7 @@ void Application::createConfig(int pCount)
 	createUniformBuffer();
 	createDescriptorPool();
 	createDescriptorSet();
-	createCommandBuffers();
+	createCommandBuffers(); 
 	createSemaphores();
 
 	prepareCompute();
@@ -94,6 +94,8 @@ void Application::cleanupSwapChain()
 
 	vkFreeCommandBuffers(device, commandPool, static_cast<uint32_t>(commandBuffers.size()), commandBuffers.data());
 
+	vkFreeCommandBuffers(device, compute.commandPool, static_cast<uint32_t>(1), &compute.commandBuffer);
+
 	vkDestroyPipeline(device, graphicsPipeline, nullptr);
 	vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
 	vkDestroyRenderPass(device, renderPass, nullptr);
@@ -122,9 +124,19 @@ void Application::cleanup()
 	vkFreeMemory(device, uniformBufferMemory, nullptr);
 
 
+	// destroy buffers
+	for (auto &b : buffers)
+	{
+		vkDestroyBuffer(device, b->buffer, nullptr);
+		vkFreeMemory(device, b->memory, nullptr);
+	}
 
-	//vkDestroyBuffer(device, vertexBuffer, nullptr);
-	//vkFreeMemory(device, vertexBufferMemory, nullptr);
+	// compute clean up
+	vkDestroyFence(device, compute.fence, nullptr);
+	vkDestroyPipelineLayout(device, compute.pipelineLayout, nullptr);
+	vkDestroyDescriptorSetLayout(device, compute.descriptorSetLayout, nullptr);
+	vkDestroyPipeline(device, compute.pipeline, nullptr);
+	vkDestroyCommandPool(device, compute.commandPool, nullptr);
 
 	vkDestroySemaphore(device, renderFinishedSemaphore, nullptr);
 	vkDestroySemaphore(device, imageAvailableSemaphore, nullptr);
@@ -510,28 +522,42 @@ void Application::createRenderPass()
 	subpass.pDepthStencilAttachment = &depthAttachmentRef;
 
 	// create subpass dependencies 
-	VkSubpassDependency dependency = {};
-	dependency.srcSubpass = VK_SUBPASS_EXTERNAL; // refers to the implicit subpass before or after the render pass depending on whether it is specified in srcSubpass or dstSubpass
-	dependency.dstSubpass = 0; // this is the subpass created above... 
-
 	// specify operations to wait on and where they occur. - need to wait for the swap chain to finish reading before accessing it
 	// so wait for the colour attachment stage
-	dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-	dependency.srcAccessMask = 0;
 	// this prevents the render pass from transistioning before we need to start writing colours to it
 
 	// array of depthbuffer
 	std::array<VkAttachmentDescription, 2> attachments = { colourAttachment, depthAttachment };
 
-	// CREATE RENDER PASS
+	//// CREATE RENDER PASS
+
+	// Subpass dependencies for layout transitions
+	std::array<VkSubpassDependency, 2> dependencies;
+
+	dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
+	dependencies[0].dstSubpass = 0;
+	dependencies[0].srcStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+	dependencies[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	dependencies[0].srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+	dependencies[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+	dependencies[0].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+
+	dependencies[1].srcSubpass = 0;
+	dependencies[1].dstSubpass = VK_SUBPASS_EXTERNAL;
+	dependencies[1].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	dependencies[1].dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+	dependencies[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+	dependencies[1].dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+	dependencies[1].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+
 	VkRenderPassCreateInfo renderPassInfo = {};
 	renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
 	renderPassInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
 	renderPassInfo.pAttachments = attachments.data();
 	renderPassInfo.subpassCount = 1;
 	renderPassInfo.pSubpasses = &subpass;
-	renderPassInfo.dependencyCount = 1;
-	renderPassInfo.pDependencies = &dependency;
+	renderPassInfo.dependencyCount = static_cast<uint32_t>(dependencies.size());
+	renderPassInfo.pDependencies = dependencies.data();
 
 	if (vkCreateRenderPass(device, &renderPassInfo, nullptr, &renderPass) != VK_SUCCESS)
 		throw std::runtime_error("Failed to create Render Pass!");
@@ -613,7 +639,12 @@ void Application::createGraphicsPipeline()
 	{
 		attributeDesc.push_back(d);
 	} 
-	attributeDesc.push_back(InstanceBO::getAttributeDescription());
+
+	// push back instance attributes
+	for (auto &d : InstanceBO::getAttributeDescription())
+	{
+		attributeDesc.push_back(d);
+	}
 
 	VkPipelineVertexInputStateCreateInfo vertexInputInfo = {};
 	vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
@@ -1058,11 +1089,13 @@ void Application::createUniformBuffer()
 void Application::createDescriptorPool()
 {
 	// how many and what type
-	std::vector<VkDescriptorPoolSize> poolSize = { VkDescriptorPoolSize(), VkDescriptorPoolSize() };
+	std::vector<VkDescriptorPoolSize> poolSize = { VkDescriptorPoolSize(), VkDescriptorPoolSize(), VkDescriptorPoolSize() };
 	poolSize[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	poolSize[0].descriptorCount = 1;
-	poolSize[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	poolSize[0].descriptorCount = 2;
+	poolSize[1].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
 	poolSize[1].descriptorCount = 1;
+	poolSize[2].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	poolSize[2].descriptorCount = 1;
 
 
 	VkDescriptorPoolCreateInfo poolInfo = {};
@@ -1307,6 +1340,19 @@ void Application::drawFrame()
 	// wait until presentation is finished before drawing the next frame
 	vkQueueWaitIdle(presentQueue);
 
+	// Submit compute commands
+	vkWaitForFences(device, 1, &compute.fence, VK_TRUE, UINT64_MAX);
+	vkResetFences(device, 1, &compute.fence);
+
+	VkSubmitInfo computeSubmitInfo{};
+	computeSubmitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	computeSubmitInfo.commandBufferCount = 1;
+	computeSubmitInfo.pCommandBuffers = &compute.commandBuffer;
+
+	if(vkQueueSubmit(compute.queue, 1, &computeSubmitInfo, compute.fence) != VK_SUCCESS)
+		throw std::runtime_error("failed to submit compute queue");
+
+
 }
 
 void Application::createTextureImage()
@@ -1355,7 +1401,7 @@ void Application::createTextureSampler()
 	samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
 	samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
 	samplerInfo.anisotropyEnable = VK_TRUE;
-	samplerInfo.maxAnisotropy = 16;
+	samplerInfo.maxAnisotropy = 1;
 	samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
 	samplerInfo.unnormalizedCoordinates = VK_FALSE;
 	samplerInfo.compareEnable = VK_FALSE;
@@ -1839,7 +1885,7 @@ void Application::buildComputeCommandBuffer()
 	bufferBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
 	bufferBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 	bufferBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-	bufferBarrier.buffer = compute.storageBuffer->buffer;
+	bufferBarrier.buffer = buffers[INSTANCE]->buffer;
 	//bufferBarrier.size = compute.storageBuffer->descriptor.range;
 	bufferBarrier.srcAccessMask = VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT;						// Vertex shader invocations have finished reading from the buffer
 	bufferBarrier.dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT;								// Compute shader wants to write to the buffer
@@ -1867,7 +1913,7 @@ void Application::buildComputeCommandBuffer()
 	// Without this the (rendering) vertex shader may display incomplete results (partial data from last frame) 
 	bufferBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;								// Compute shader has finished writes to the buffer
 	bufferBarrier.dstAccessMask = VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT;						// Vertex shader invocations want to read from the buffer
-	bufferBarrier.buffer = compute.storageBuffer->buffer;
+	bufferBarrier.buffer = buffers[INSTANCE]->buffer;
 	//bufferBarrier.size = compute.storageBuffer.descriptor.range;
 	// Compute and graphics queue may have different queue families (see VulkanDevice::createLogicalDevice)
 	// For the barrier to work across different queues, we need to set their family indices
@@ -1948,10 +1994,10 @@ void Application::prepareCompute()
 		throw std::runtime_error("Failed to allocate descriptor set for compute");
 
 	// create buffers.
-	compute.storageBuffer = buffers[INSTANCE];
+	//compute.storageBuffer = buffers[INSTANCE];
 
 	VkDescriptorBufferInfo bufferInfo = {};
-	bufferInfo.buffer = compute.storageBuffer->buffer;
+	bufferInfo.buffer = buffers[INSTANCE]->buffer;
 	bufferInfo.offset = 0;
 	bufferInfo.range = sizeof(particle);
 
@@ -2035,6 +2081,9 @@ void Application::prepareCompute()
 	fenceCreateInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 	if(vkCreateFence(device, &fenceCreateInfo, nullptr, &compute.fence) != VK_SUCCESS)
 		throw std::runtime_error("Failed creating compute fence");
+
+
+	vkDestroyShaderModule(device, computeShaderMod, nullptr);
 
 	// Build a single command buffer containing the compute dispatch commands
 	buildComputeCommandBuffer();
