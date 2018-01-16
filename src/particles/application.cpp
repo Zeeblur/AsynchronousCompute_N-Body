@@ -7,6 +7,9 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
+// Custom define for better code readability
+#define VK_FLAGS_NONE 0
+
 
 void Application::initWindow()
 {
@@ -50,18 +53,20 @@ void Application::initVulkan()
 	}
 }
 
-void Application::createConfig()
+void Application::createConfig(int pCount)
 {
+	PARTICLE_COUNT = pCount;
 	createVertexBuffer();
 	createIndexBuffer();
 	createInstanceBuffer();
 	createUniformBuffer();
 	createDescriptorPool();
 	createDescriptorSet();
-	createCommandBuffers();
+	createCommandBuffers(); 
 	createSemaphores();
-}
 
+	prepareCompute();
+}
 
 void Application::mainLoop()
 {
@@ -70,6 +75,7 @@ void Application::mainLoop()
 		glfwPollEvents();
 		updateUniformBuffer();   // update
 		drawFrame();			 // render
+		updateCompute();
 	}
 
 	vkDeviceWaitIdle(device);
@@ -117,9 +123,22 @@ void Application::cleanup()
 	vkFreeMemory(device, uniformBufferMemory, nullptr);
 
 
+	// destroy buffers
+	for (auto &b : buffers)
+	{
+		vkDestroyBuffer(device, b->buffer, nullptr);
+		vkFreeMemory(device, b->memory, nullptr);
+	}
 
-	//vkDestroyBuffer(device, vertexBuffer, nullptr);
-	//vkFreeMemory(device, vertexBufferMemory, nullptr);
+	// compute clean up
+	vkDestroyFence(device, compute.fence, nullptr);
+	vkDestroyPipelineLayout(device, compute.pipelineLayout, nullptr);
+	vkDestroyDescriptorSetLayout(device, compute.descriptorSetLayout, nullptr);
+	vkDestroyPipeline(device, compute.pipeline, nullptr);
+	vkFreeCommandBuffers(device, compute.commandPool, static_cast<uint32_t>(1), &compute.commandBuffer);
+	vkDestroyCommandPool(device, compute.commandPool, nullptr);
+	vkDestroyBuffer(device, compute.uniformBuffer, nullptr);
+	vkFreeMemory(device, compute.uboMem, nullptr);
 
 	vkDestroySemaphore(device, renderFinishedSemaphore, nullptr);
 	vkDestroySemaphore(device, imageAvailableSemaphore, nullptr);
@@ -236,13 +255,13 @@ void Application::pickPhysicalDevice()
 	if (deviceCount == 0)
 		throw std::runtime_error("Failed to find GPU with Vulkan support!");
 
-	for (const auto& device : devices)
+	for (const auto& dev : devices)
 	{
 		std::cout << "checking device" << std::endl;
 
-		if (isDeviceSuitable(device)) 
+		if (isDeviceSuitable(dev)) 
 		{
-			physicalDevice = device;
+			physicalDevice = dev;
 			break;
 		}
 	}
@@ -263,6 +282,8 @@ void Application::createLogicalDevice()
 	std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
 	std::set<int> uniqueQFamilies = { indices.graphicsFamily, indices.presentFamily };
 	
+	queueFamilyIndices.graphics = indices.graphicsFamily;
+	queueFamilyIndices.present = indices.presentFamily;
 
 	// influence sheduling of the command buffer (NEEDED EVEN IF ONLY 1 Q)
 	float queuePriority = 1.0f;
@@ -273,6 +294,10 @@ void Application::createLogicalDevice()
 		VkDeviceQueueCreateInfo qCreateInfo;
 		qCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
 		
+		// need to ensure these are null so no garbage
+		qCreateInfo.flags = 0;
+		qCreateInfo.pNext = NULL;
+
 		// this is either graphics/surface etc
 		qCreateInfo.queueFamilyIndex = queueFam;
 
@@ -499,28 +524,42 @@ void Application::createRenderPass()
 	subpass.pDepthStencilAttachment = &depthAttachmentRef;
 
 	// create subpass dependencies 
-	VkSubpassDependency dependency = {};
-	dependency.srcSubpass = VK_SUBPASS_EXTERNAL; // refers to the implicit subpass before or after the render pass depending on whether it is specified in srcSubpass or dstSubpass
-	dependency.dstSubpass = 0; // this is the subpass created above... 
-
 	// specify operations to wait on and where they occur. - need to wait for the swap chain to finish reading before accessing it
 	// so wait for the colour attachment stage
-	dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-	dependency.srcAccessMask = 0;
 	// this prevents the render pass from transistioning before we need to start writing colours to it
 
 	// array of depthbuffer
 	std::array<VkAttachmentDescription, 2> attachments = { colourAttachment, depthAttachment };
 
-	// CREATE RENDER PASS
+	//// CREATE RENDER PASS
+
+	// Subpass dependencies for layout transitions
+	std::array<VkSubpassDependency, 2> dependencies;
+
+	dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
+	dependencies[0].dstSubpass = 0;
+	dependencies[0].srcStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+	dependencies[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	dependencies[0].srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+	dependencies[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+	dependencies[0].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+
+	dependencies[1].srcSubpass = 0;
+	dependencies[1].dstSubpass = VK_SUBPASS_EXTERNAL;
+	dependencies[1].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	dependencies[1].dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+	dependencies[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+	dependencies[1].dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+	dependencies[1].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+
 	VkRenderPassCreateInfo renderPassInfo = {};
 	renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
 	renderPassInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
 	renderPassInfo.pAttachments = attachments.data();
 	renderPassInfo.subpassCount = 1;
 	renderPassInfo.pSubpasses = &subpass;
-	renderPassInfo.dependencyCount = 1;
-	renderPassInfo.pDependencies = &dependency;
+	renderPassInfo.dependencyCount = static_cast<uint32_t>(dependencies.size());
+	renderPassInfo.pDependencies = dependencies.data();
 
 	if (vkCreateRenderPass(device, &renderPassInfo, nullptr, &renderPass) != VK_SUCCESS)
 		throw std::runtime_error("Failed to create Render Pass!");
@@ -602,7 +641,12 @@ void Application::createGraphicsPipeline()
 	{
 		attributeDesc.push_back(d);
 	} 
-	attributeDesc.push_back(InstanceBO::getAttributeDescription());
+
+	// push back instance attributes
+	for (auto &d : InstanceBO::getAttributeDescription())
+	{
+		attributeDesc.push_back(d);
+	}
 
 	VkPipelineVertexInputStateCreateInfo vertexInputInfo = {};
 	vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
@@ -763,7 +807,7 @@ void Application::createGraphicsPipeline()
 
 	
 	// create the pipeline!
-	if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &graphicsPipeline) != VK_SUCCESS)
+	if (vkCreateGraphicsPipelines(device, pipeCache, 1, &pipelineInfo, nullptr, &graphicsPipeline) != VK_SUCCESS)
 		throw std::runtime_error("Couldn't create graphics pipeline!");
 
 
@@ -1047,11 +1091,13 @@ void Application::createUniformBuffer()
 void Application::createDescriptorPool()
 {
 	// how many and what type
-	std::vector<VkDescriptorPoolSize> poolSize = { VkDescriptorPoolSize(), VkDescriptorPoolSize() };
+	std::vector<VkDescriptorPoolSize> poolSize = { VkDescriptorPoolSize(), VkDescriptorPoolSize(), VkDescriptorPoolSize() };
 	poolSize[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	poolSize[0].descriptorCount = 1;
-	poolSize[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	poolSize[0].descriptorCount = 2;
+	poolSize[1].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
 	poolSize[1].descriptorCount = 1;
+	poolSize[2].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	poolSize[2].descriptorCount = 1;
 
 
 	VkDescriptorPoolCreateInfo poolInfo = {};
@@ -1294,7 +1340,20 @@ void Application::drawFrame()
 	}
 
 	// wait until presentation is finished before drawing the next frame
-	vkQueueWaitIdle(presentQueue);
+	vkQueueWaitIdle(presentQueue);  
+
+	// Submit compute commands
+	vkWaitForFences(device, 1, &compute.fence, VK_TRUE, UINT64_MAX);
+	vkResetFences(device, 1, &compute.fence);
+
+	VkSubmitInfo computeSubmitInfo{};
+	computeSubmitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	computeSubmitInfo.commandBufferCount = 1;
+	computeSubmitInfo.pCommandBuffers = &compute.commandBuffer;
+
+	if(vkQueueSubmit(compute.queue, 1, &computeSubmitInfo, compute.fence) != VK_SUCCESS)
+		throw std::runtime_error("failed to submit compute queue");
+
 
 }
 
@@ -1344,7 +1403,7 @@ void Application::createTextureSampler()
 	samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
 	samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
 	samplerInfo.anisotropyEnable = VK_TRUE;
-	samplerInfo.maxAnisotropy = 16;
+	samplerInfo.maxAnisotropy = 1;
 	samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
 	samplerInfo.unnormalizedCoordinates = VK_FALSE;
 	samplerInfo.compareEnable = VK_FALSE;
@@ -1447,19 +1506,18 @@ void Application::endSingleTimeCommands(VkCommandBuffer commandBuffer) {
 }
 
 void Application::updateUniformBuffer()
-{
-	static auto startTime = std::chrono::high_resolution_clock::now();
+{ 
+	static auto startTime = std::chrono::high_resolution_clock::now();  
 
 	auto currentTime = std::chrono::high_resolution_clock::now();
 	float time = std::chrono::duration_cast<std::chrono::milliseconds>(currentTime - startTime).count() / 1000.0f;
 
-	UniformBufferObject ubo = {};
-	ubo.model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+	UniformBufferObject ubo = {}; 
+	ubo.model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f));
 	ubo.view = glm::lookAt(glm::vec3(0.0f, 0.0f, -20.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
 	ubo.proj = glm::perspective(glm::radians(45.0f), swapChainExtent.width / (float)swapChainExtent.height, 0.1f, 10000.0f);
-	//ubo.proj[1][1] *= -1;  // winding order is anti-clockwise
 
-	void* data;
+	void* data;  
 	vkMapMemory(device, uniformBufferMemory, 0, sizeof(ubo), 0, &data);
 	memcpy(data, &ubo, sizeof(ubo));
 	vkUnmapMemory(device, uniformBufferMemory);
@@ -1583,7 +1641,8 @@ bool Application::checkDeviceExtensionSupport(VkPhysicalDevice device)
 	}
 
 	return requiredExtensions.empty();
-}
+}  
+
 
 // query info
 uint32_t Application::findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties)
@@ -1729,8 +1788,9 @@ VkPresentModeKHR Application::chooseSwapPresentMode(const std::vector<VkPresentM
 	// blocks application when display queue is full (double buffering)
 	VkPresentModeKHR bestMode = VK_PRESENT_MODE_FIFO_KHR;
 
-	for (const auto& availablePresentMode : availablePresentModes) {
-
+	for (const auto& availablePresentMode : availablePresentModes)
+	{
+		 
 		// triple buffering!! - avoid tearing less than std vsync. 
 		// doesn't block app when queue is full, the images are replaced with newer ones. (Frames = images)
 		if (availablePresentMode == VK_PRESENT_MODE_MAILBOX_KHR)
@@ -1743,7 +1803,7 @@ VkPresentModeKHR Application::chooseSwapPresentMode(const std::vector<VkPresentM
 		{
 			bestMode = availablePresentMode;
 		}
-		
+		   
 	}
 
 	return bestMode;
@@ -1779,4 +1839,300 @@ void Application::setVertexData(const std::vector<Vertex> vert, const std::vecto
 	dynamic_cast<IndexBO*>(buffers[INDEX])->indices = ind;
 	dynamic_cast<InstanceBO*>(buffers[INSTANCE])->particles = part;
 
+}
+
+int Application::findComputeQueueFamily(VkPhysicalDevice pd)
+{
+	// find and return the index of compute queue family for device
+
+	int index = -1;
+
+	// as before, find them, set them
+	uint32_t queueFamilyCount = 0;
+	vkGetPhysicalDeviceQueueFamilyProperties(pd, &queueFamilyCount, nullptr);
+
+	std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
+	vkGetPhysicalDeviceQueueFamilyProperties(pd, &queueFamilyCount, queueFamilies.data());
+
+	// find suitable family that supports compute.
+	unsigned int i = 0;
+	for (const auto& queueFamily : queueFamilies)
+	{
+
+		// check for compute support 
+		if (queueFamily.queueCount > 0 && queueFamily.queueFlags & VK_QUEUE_COMPUTE_BIT)
+		{
+			index = i;
+			break;
+		}
+		i++;
+	}
+
+	return index;
+}
+
+void Application::buildComputeCommandBuffer()
+{
+	// create command buffer
+	VkCommandBufferBeginInfo cmdBufInfo{};
+	cmdBufInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+
+	if (vkBeginCommandBuffer(compute.commandBuffer, &cmdBufInfo) != VK_SUCCESS)
+		throw std::runtime_error("Failed to create compute command buffer");
+
+	// Compute particle movement
+
+	// Add memory barrier to ensure that the (graphics) vertex shader has fetched attributes before compute starts to write to the buffer
+	VkBufferMemoryBarrier bufferBarrier{};
+	bufferBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+	bufferBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	bufferBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	bufferBarrier.buffer = buffers[INSTANCE]->buffer;
+	//bufferBarrier.size = VK_WHOLE_SIZE;
+	bufferBarrier.srcAccessMask = VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT;						// Vertex shader invocations have finished reading from the buffer
+	bufferBarrier.dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT;								// Compute shader wants to write to the buffer
+																							// Compute and graphics queue may have different queue families (see VulkanDevice::createLogicalDevice)
+																							// For the barrier to work across different queues, we need to set their family indices
+	bufferBarrier.srcQueueFamilyIndex = queueFamilyIndices.graphics;			// Required as compute and graphics queue may have different families
+	bufferBarrier.dstQueueFamilyIndex = queueFamilyIndices.compute;			// Required as compute and graphics queue may have different families
+
+	vkCmdPipelineBarrier(
+		compute.commandBuffer,
+		VK_PIPELINE_STAGE_VERTEX_SHADER_BIT,
+		VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+		VK_FLAGS_NONE,
+		0, nullptr,
+		1, &bufferBarrier,
+		0, nullptr);
+
+	vkCmdBindPipeline(compute.commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, compute.pipeline);
+	vkCmdBindDescriptorSets(compute.commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, compute.pipelineLayout, 0, 1, &compute.descriptorSet, 0, 0);
+
+	// Dispatch the compute     
+	vkCmdDispatch(compute.commandBuffer, PARTICLE_COUNT, 1, 1);
+
+	// Add memory barrier to ensure that compute shader has finished writing to the buffer
+	// Without this the (rendering) vertex shader may display incomplete results (partial data from last frame) 
+	bufferBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;								// Compute shader has finished writes to the buffer
+	bufferBarrier.dstAccessMask = VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT;						// Vertex shader invocations want to read from the buffer
+	bufferBarrier.buffer = buffers[INSTANCE]->buffer;
+	//bufferBarrier.size = VK_WHOLE_SIZE;
+	// Compute and graphics queue may have different queue families (see VulkanDevice::createLogicalDevice)
+	// For the barrier to work across different queues, we need to set their family indices
+	bufferBarrier.srcQueueFamilyIndex = queueFamilyIndices.compute;			// Required as compute and graphics queue may have different families
+	bufferBarrier.dstQueueFamilyIndex = queueFamilyIndices.graphics;			// Required as compute and graphics queue may have different families
+
+	vkCmdPipelineBarrier(
+		compute.commandBuffer,
+		VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+		VK_PIPELINE_STAGE_VERTEX_SHADER_BIT,
+		VK_FLAGS_NONE,
+		0, nullptr,
+		1, &bufferBarrier,
+		0, nullptr);
+
+	vkEndCommandBuffer(compute.commandBuffer);
+
+
+
+	// get memory back and count
+	vkMapMemory(device, buffers[INSTANCE]->memory, 0, buffers[INSTANCE]->size * sizeof(particle), 0, &returnParticles);
+
+
+}
+
+void Application::createComputeUBO()
+{
+	compute.ubo.particleCount = PARTICLE_COUNT;
+	compute.ubo.deltaT = 0.016f;
+	compute.ubo.destX = 0.5f;
+	compute.ubo.destY = 0.0f;
+
+	VkDeviceSize bufferSize = sizeof(ComputeConfig::computeUBO);
+	createBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+		compute.uniformBuffer, compute.uboMem);  // buffer pointer and memory
+}
+
+void Application::prepareCompute()
+{
+	createComputeUBO();
+
+	// get compute capable device queue
+	int queueIndex = findComputeQueueFamily(physicalDevice);
+	// store value
+	queueFamilyIndices.compute = queueIndex;
+	vkGetDeviceQueue(device, queueIndex, 0, &compute.queue);
+
+	// create compute pipeline
+	// Compute pipelines are created separate from graphics pipelines even if they use the same queue (family index)
+
+	VkDescriptorSetLayoutBinding positionBinding{};
+	positionBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+	positionBinding.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+	positionBinding.binding = 0;
+	positionBinding.descriptorCount = 1;
+
+	VkDescriptorSetLayoutBinding uniformBinding{};
+	uniformBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	uniformBinding.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+	uniformBinding.binding = 1;
+	uniformBinding.descriptorCount = 1;
+
+	std::vector<VkDescriptorSetLayoutBinding> setLayoutBindings{};
+	
+	// Binding 0 : Particle position storage buffer
+	setLayoutBindings.push_back(positionBinding);
+	// Binding 1 : Uniform buffer
+	setLayoutBindings.push_back(uniformBinding);
+
+
+	// decsriptor layout create info
+	VkDescriptorSetLayoutCreateInfo descriptorLayout{};
+	descriptorLayout.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+	descriptorLayout.pBindings = setLayoutBindings.data();
+	descriptorLayout.bindingCount = static_cast<uint32_t>(setLayoutBindings.size());
+
+	// create descriptor layout
+	if(vkCreateDescriptorSetLayout(device, &descriptorLayout, nullptr, &compute.descriptorSetLayout) != VK_SUCCESS)
+		throw std::runtime_error("Failed to create compute desc layout");
+
+	// create pipeline layout 
+	VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo{};
+	pipelineLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+	pipelineLayoutCreateInfo.setLayoutCount = 1;
+	pipelineLayoutCreateInfo.pSetLayouts = &compute.descriptorSetLayout;
+
+	if(vkCreatePipelineLayout(device, &pipelineLayoutCreateInfo, nullptr, &compute.pipelineLayout) != VK_SUCCESS)
+		throw std::runtime_error("Failed to create compute pipeline");
+
+	// allocate descriptor set info
+	VkDescriptorSetAllocateInfo allocInfo{};
+	allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+	allocInfo.descriptorPool = descriptorPool;
+	allocInfo.pSetLayouts = &compute.descriptorSetLayout;
+	allocInfo.descriptorSetCount = 1; 
+	 
+	// create allocation
+	if(vkAllocateDescriptorSets(device, &allocInfo, &compute.descriptorSet) != VK_SUCCESS)
+		throw std::runtime_error("Failed to allocate descriptor set for compute");
+
+	// create buffers.
+	//compute.storageBuffer = buffers[INSTANCE];
+
+	VkDescriptorBufferInfo bufferInfo = {};
+	bufferInfo.buffer = buffers[INSTANCE]->buffer;
+	bufferInfo.offset = 0;
+	bufferInfo.range = sizeof(particle) * buffers[INSTANCE]->size;  //  BUFFER SIZE FOR COMPUTE!
+
+
+	VkDescriptorBufferInfo UBI = {};
+	UBI.buffer = compute.uniformBuffer;
+	UBI.offset = 0;
+	UBI.range = sizeof(ComputeConfig::computeUBO);
+
+	// Binding 0 : Particle position storage buffer
+	VkWriteDescriptorSet storageDesc{};
+	storageDesc.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+	storageDesc.dstSet = compute.descriptorSet;
+	storageDesc.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+	storageDesc.dstBinding = 0;
+	storageDesc.pBufferInfo = &bufferInfo;
+	storageDesc.descriptorCount = 1;
+
+	// Binding 1 : Uniform buffer
+	VkWriteDescriptorSet uniformDesc{};
+	uniformDesc.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET; 
+	uniformDesc.dstSet = compute.descriptorSet;
+	uniformDesc.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	uniformDesc.dstBinding = 1;
+	uniformDesc.pBufferInfo = &UBI;
+	uniformDesc.descriptorCount = 1;
+
+	std::vector<VkWriteDescriptorSet> computeWriteDescriptorSets = { storageDesc, uniformDesc };
+
+	// create sets
+	vkUpdateDescriptorSets(device, static_cast<uint32_t>(computeWriteDescriptorSets.size()), computeWriteDescriptorSets.data(), 0, NULL);
+
+	// Create pipeline
+
+	// create shader module
+	auto computeShaderCode = readFile("res/shaders/comp.spv");
+
+	// modules only needed in creation of pipeline so can be destroyed locally
+	VkShaderModule computeShaderMod = createShaderModule(computeShaderCode);
+
+	// assign the shaders
+	VkPipelineShaderStageCreateInfo compShaderStageInfo = {};
+	compShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	compShaderStageInfo.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+	compShaderStageInfo.module = computeShaderMod;
+	compShaderStageInfo.pName = "main";		// function to invoke
+
+
+	// create info for pipeline setting shader
+	VkComputePipelineCreateInfo computePipelineCreateInfo{};
+	computePipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+	computePipelineCreateInfo.layout = compute.pipelineLayout;
+	computePipelineCreateInfo.flags = 0;
+	computePipelineCreateInfo.stage = compShaderStageInfo;
+	
+	// create it
+	if(vkCreateComputePipelines(device, pipeCache, 1, &computePipelineCreateInfo, nullptr, &compute.pipeline) != VK_SUCCESS)
+		throw std::runtime_error("failed creating compute pipeline");
+
+	// Separate command pool as queue family for compute may be different than graphics
+	VkCommandPoolCreateInfo cmdPoolInfo = {};
+	cmdPoolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+	cmdPoolInfo.queueFamilyIndex = queueFamilyIndices.compute;
+	cmdPoolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+	if(vkCreateCommandPool(device, &cmdPoolInfo, nullptr, &compute.commandPool) != VK_SUCCESS)
+		throw std::runtime_error("Failed creating compute cmd pool");
+
+	// Create a command buffer for compute operations
+	VkCommandBufferAllocateInfo cmdBufAllocateInfo{};
+	cmdBufAllocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+	cmdBufAllocateInfo.commandPool = compute.commandPool;
+	cmdBufAllocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+	cmdBufAllocateInfo.commandBufferCount = 1;
+	if(vkAllocateCommandBuffers(device, &cmdBufAllocateInfo, &compute.commandBuffer) != VK_SUCCESS)
+		throw std::runtime_error("Failed allocating buffer for compute commands");
+
+	// Fence for compute CB sync
+	VkFenceCreateInfo fenceCreateInfo{};
+	fenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+	fenceCreateInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+	if(vkCreateFence(device, &fenceCreateInfo, nullptr, &compute.fence) != VK_SUCCESS)
+		throw std::runtime_error("Failed creating compute fence");
+
+
+	vkDestroyShaderModule(device, computeShaderMod, nullptr);
+
+	// Build a single command buffer containing the compute dispatch commands
+	buildComputeCommandBuffer();
+}
+
+void Application::updateCompute()
+{
+	compute.ubo.deltaT = 0.2f;
+	compute.ubo.destX = 0.75f;
+	compute.ubo.destY = 0.0f;
+	vkMapMemory(device, compute.uboMem, 0, sizeof(compute.ubo), 0, &compute.mapped);
+	memcpy(compute.mapped, &compute.ubo, sizeof(compute.ubo));
+	vkUnmapMemory(device, compute.uboMem);
+
+
+ //   //print buffer
+	//if (returnParticles == nullptr)
+	//	return;
+	//   
+	//for (int i = 0; i < 2; ++i) { 
+	//	std::cout << "Return " << i << ": "
+	//		<< ((particle *)returnParticles)[i].pos.x << " "
+	//		<< ((particle *)returnParticles)[i].pos.y << " "
+	//		<< ((particle *)returnParticles)[i].pos.z << " "
+	//		<< ((particle *)returnParticles)[i].vel.x << " "
+	//		<< ((particle *)returnParticles)[i].vel.y << " "
+	//		<< ((particle *)returnParticles)[i].vel.z << " "
+	//		<< std::endl;
+ //	}    
 }

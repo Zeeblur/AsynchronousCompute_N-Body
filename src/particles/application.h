@@ -138,7 +138,10 @@ enum bufferType
 	INSTANCE
 };
 
-struct BufferObject;
+struct BufferObject; // forward declare
+
+// Resources for the compute part of the example
+struct ComputeConfig;
 
 class Application
 {
@@ -163,6 +166,39 @@ private:
 	VkSemaphore renderFinishedSemaphore;
 
 
+	VkPipelineCache pipeCache;
+
+	struct ComputeConfig
+	{
+		BufferObject* storageBuffer;					// (Shader) storage buffer object containing the particles
+		VkBuffer uniformBuffer;		    // Uniform buffer object containing particle system parameters
+		VkQueue queue;								// Separate queue for compute commands (queue family may differ from the one used for graphics)
+		VkCommandPool commandPool;					// Use a separate command pool (queue family may differ from the one used for graphics)
+		VkCommandBuffer commandBuffer;				// Command buffer storing the dispatch commands and barriers
+		VkFence fence;								// Synchronization fence to avoid rewriting compute CB if still in use
+		VkDescriptorSetLayout descriptorSetLayout;	// Compute shader binding layout
+		VkDescriptorSet descriptorSet;				// Compute shader bindings
+		VkPipelineLayout pipelineLayout;			// Layout of the compute pipeline
+		VkPipeline pipeline;						// Compute pipeline for updating particle positions
+
+
+
+		// memory for ubo
+		VkDeviceMemory uboMem;
+		void* mapped = nullptr;
+													// Compute shader uniform block object
+		struct computeUBO
+		{
+			float deltaT;							//		Frame delta time
+			float destX;							//		x position of the attractor
+			float destY;							//		y position of the attractor
+			int32_t particleCount = 0;
+		} ubo;
+	} compute;
+
+	void createComputeUBO();
+	void updateCompute();
+
 	VkBuffer uniformBuffer;
 	VkDeviceMemory uniformBufferMemory;
 	VkDescriptorPool descriptorPool;
@@ -180,6 +216,13 @@ private:
 	std::vector<VkFramebuffer> swapChainFramebuffers;
 	std::vector<VkCommandBuffer> commandBuffers;
 
+	// to hold the indicies of the queue families
+	struct
+	{
+		uint32_t graphics;
+		uint32_t compute;
+		uint32_t present;
+	} queueFamilyIndices;
 
 
 	void initWindow();
@@ -213,6 +256,8 @@ private:
 	void createCommandPool();
 	void createInstanceBuffer();
 
+
+
 	// texture stuff
 	void createTextureImage();
 	void createImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory);
@@ -229,20 +274,16 @@ private:
 	VkFormat findDepthFormat();
 	VkFormat findSupportedFormat(const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features);
 	
-
-
 	BufferObject* buffers[3];//  { new VertexBO(), new IndexBO(), new InstanceBO(); };
 
-
-
-	// TODO: SHOULDN'T ALLOCATE MEMORY FOR EVERY OBJECT INDIVIDUALLY - NEED TO IMPLEMENT ALLOCATOR
 	void createVertexBuffer();
 	void createIndexBuffer();
-	void createUniformBuffer(); // NOT MOST EFFICIENT WAY TODO: CHANGE TO PUSH CONSTANTS
+	void createUniformBuffer();
 	void createDescriptorPool();
 	void createDescriptorSet();
 
 	void createCommandBuffers();
+	void buildComputeCommandBuffer();
 	void createSemaphores();
 
 	void drawFrame();
@@ -260,6 +301,7 @@ private:
 
 	// find queues
 	QueueFamilyIndices findQueuesFamilies(VkPhysicalDevice device);
+	int findComputeQueueFamily(VkPhysicalDevice device);
 
 	SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice device);
 	VkSurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats);
@@ -294,6 +336,11 @@ private:
 	const int WIDTH = 800;
 	const int HEIGHT = 600;
 
+	void prepareCompute();
+
+	// get memory back and count
+	void * returnParticles;
+
 public:
 
 	inline static std::shared_ptr<Application> get()
@@ -315,7 +362,8 @@ public:
 	void mainLoop();
 
 	void setVertexData(const std::vector<Vertex> vert, const std::vector<uint16_t> ind, const std::vector<particle> part);
-	void createConfig();
+	void createConfig(int pCount);
+	int PARTICLE_COUNT = 0;
 
 	void clean()
 	{
@@ -430,10 +478,10 @@ struct InstanceBO : BufferObject
 		memcpy(data, particles.data(), (size_t)bufferSize);
 		vkUnmapMemory(*dev, stagingBufferMemory);
 
-		// note usage is INDEX buffer. 
+		// note usage is INDEX buffer. and storage for compute
 		Application::get()->createBuffer(bufferSize,
-			VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 
+			VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
 			buffer,
 			memory); 
 
@@ -452,15 +500,22 @@ struct InstanceBO : BufferObject
 		return vInputBindDescription;
 	}
 
-	static VkVertexInputAttributeDescription getAttributeDescription()
+	static std::array<VkVertexInputAttributeDescription, 2> getAttributeDescription()
 	{
 		// 1 attributes (position)
-		VkVertexInputAttributeDescription attributeDesc;
+		std::array<VkVertexInputAttributeDescription, 2> attributeDesc;
 
-		attributeDesc.binding = 1; // which binding (the only one created above)
-		attributeDesc.location = 3; // which location of the vertex shader
-		attributeDesc.format = VK_FORMAT_R32G32B32_SFLOAT; // format as a vector 3 (3floats)
-		attributeDesc.offset = 0;// sizeof(float) * 3;// offsetof(particle, pos); // calculate the offset within each Vertex
+		attributeDesc[0].binding = 1; // which binding (the only one created above)
+		attributeDesc[0].location = 3; // which location of the vertex shader
+		attributeDesc[0].format = VK_FORMAT_R32G32B32_SFLOAT; // format as a vector 3 (3floats)
+		attributeDesc[0].offset = offsetof(particle, pos); // calculate the offset within each Vertex
+
+
+		// Location 2 : Velocity
+		attributeDesc[1].binding = 1; // which binding (the only one created above)
+		attributeDesc[1].location = 4; // which location of the vertex shader
+		attributeDesc[1].format = VK_FORMAT_R32G32B32_SFLOAT; // format as a vector 3 (3floats)
+		attributeDesc[1].offset = offsetof(particle, vel); // calculate the offset within each Vertex
 
 		return attributeDesc;
 	}

@@ -20,8 +20,8 @@
 
 struct particle
 {
-	glm::vec3 pos;								// Particle position
-	//glm::vec3 vel;								// Particle velocity
+	glm::vec4 pos;								// Particle position
+	glm::vec4 vel;								// Particle velocity
 };
 
  

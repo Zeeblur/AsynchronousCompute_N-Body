@@ -6,7 +6,7 @@ using namespace glm;
 nbody::nbody(const unsigned int num)
 {
 	// initialise the application
-	num_particles = num;
+	num_particles = num; 
 	initialiseVulkan();
 }
 
@@ -22,7 +22,7 @@ void nbody::prepareParticles()
 {
 	particleBuffer.resize(num_particles);
 
-	// create positions for particles
+	// create positions for particles 
 	for (auto &p : particleBuffer)
 	{
 		//set rnd position
@@ -31,19 +31,21 @@ void nbody::prepareParticles()
 
 		auto v2 = static_cast <float> (rand()) / (static_cast <float> (RAND_MAX / 20));
 		v2 -= 10;
-		p.pos = vec3(v1, v2, 0.0f);
-		
+		p.pos = vec4(v1, v2, 0.0f, 0.0f);
+		p.vel = vec4(0.0);
 	}
 }
 
 void nbody::run()
 {
-	// loop here
-	prepareParticles();
-	createSphereGeom(20, 20, vec3(0.2));
+	// loop here  
+	prepareParticles();     
+	createSphereGeom(20, 20, vec3(0.2f));
 	Application::get()->setVertexData(vertexBuffer, indexBuffer, particleBuffer);
 
-	Application::get()->createConfig();
+	// create config sets up the storage buffers for the data and uniforms. 
+	// creates the descriptions and command buffers.
+	Application::get()->createConfig(num_particles);
 	Application::get()->mainLoop();
 }
 
