@@ -36,11 +36,13 @@ void nbody::prepareParticles()
 
 		auto mass = 1.0;
 
-		if (massRNG > 150)
-			mass = 2.0;
+		if (massRNG < 150)
+			mass = 1.0;
 
-		p.pos = vec4(v1, v2, 0.0f, mass);
+		p.pos = vec4(v1, v2, 0.0f, 100);
 		p.vel = vec4(0.0);
+
+		auto rndM = static_cast <float> (rand()) / (static_cast <float> (RAND_MAX / 200));
 	}
 }
 
@@ -48,7 +50,7 @@ void nbody::run()
 {
 	// loop here  
 	prepareParticles();     
-	createSphereGeom(20, 20, vec3(0.05f));
+	createSphereGeom(20, 20, vec3(0.02f));
 	Application::get()->setVertexData(vertexBuffer, indexBuffer, particleBuffer);
 
 	// create config sets up the storage buffers for the data and uniforms. 

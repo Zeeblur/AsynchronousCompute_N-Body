@@ -51,21 +51,19 @@ void main()
 
 		vec3 dist = particles[i].pos.xyz - particles[index].pos.xyz;
 		vec3 direction = normalize(dist);
+
+		//float mass = particles[i].mass * particles[index].mass;
 		acceleration += direction * GRAVITY / pow(dot(dist, dist) + SOFTEN, POWER);
 	}
 
-	vVel += ubo.deltaT * acceleration;
-
-
+	vVel += (ubo.deltaT * acceleration);
 
 
     vPos += vVel * ubo.deltaT;
 
 
     // Write back	
-
     particles[index].pos.xyz = vPos;
-
     particles[index].vel.xyz = vVel;
 
 }

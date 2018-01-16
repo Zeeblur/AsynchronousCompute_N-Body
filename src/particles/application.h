@@ -14,7 +14,9 @@
 #include <array>
 #include <memory>
 #include "particle.h"
+#include <chrono>
 
+using namespace std::chrono;
 
 
 // if debugging - do INSTANCE validation layers
@@ -165,7 +167,7 @@ private:
 	VkSemaphore imageAvailableSemaphore;
 	VkSemaphore renderFinishedSemaphore;
 
-
+	time_point<system_clock> currentTime;
 	VkPipelineCache pipeCache;
 
 	struct ComputeConfig
@@ -501,7 +503,7 @@ struct InstanceBO : BufferObject
 	}
 
 	static std::array<VkVertexInputAttributeDescription, 2> getAttributeDescription()
-	{
+	{ 
 		// 1 attributes (position)
 		std::array<VkVertexInputAttributeDescription, 2> attributeDesc;
 

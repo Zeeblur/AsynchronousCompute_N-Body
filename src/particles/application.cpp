@@ -22,7 +22,7 @@ void Application::initWindow()
 	// create call back gfor resize
 	glfwSetWindowUserPointer(window, this);
 	glfwSetWindowSizeCallback(window, Application::onWindowResized);
-}
+} 
 
 void Application::initVulkan()
 {
@@ -2113,8 +2113,13 @@ void Application::prepareCompute()
 
 void Application::updateCompute()
 {
-	compute.ubo.deltaT = 0.2f;
-	compute.ubo.destX = 0.75f;
+
+	auto newTime = std::chrono::system_clock::now();
+	float frameTime = std::chrono::duration_cast<std::chrono::milliseconds>(newTime - currentTime).count(); 
+	currentTime = newTime;  
+	 
+	compute.ubo.deltaT = std::min(frameTime / 1000, 1 / 60.0f) / 0.2;
+	compute.ubo.destX = 0.75f; 
 	compute.ubo.destY = 0.0f;
 	vkMapMemory(device, compute.uboMem, 0, sizeof(compute.ubo), 0, &compute.mapped);
 	memcpy(compute.mapped, &compute.ubo, sizeof(compute.ubo));

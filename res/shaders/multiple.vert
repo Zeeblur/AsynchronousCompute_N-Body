@@ -30,11 +30,13 @@ void main()
 	m[3] = m[0] * v[0] + m[1] * v[1] + m[2] * v[2] + m[3];
 	
 	// scale matrix
-	m[0] = m[0] * instancePos.w;
-	m[1] = m[1] * instancePos.w;
-	m[2] = m[2] * instancePos.w;
+	mat4 s = mat4(1.0);
+	s[0] = s[0] * instancePos.w;
+	s[1] = s[1] * instancePos.w;
+	s[2] = s[2] * instancePos.w;
 	
-	mat4 model = m * ubo.model;
+	mat4 trs = m * s;
+	mat4 model = trs * ubo.model;
     gl_Position = (ubo.proj * ubo.view * model) * vec4(inPos, 1.0);
     fragColour = instancePos.xyz;
 	fragTexCoord = inTexCoord;
