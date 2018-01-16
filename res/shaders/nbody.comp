@@ -6,7 +6,8 @@
 struct particle
 {
 	vec4 pos;								// Particle position
-	vec4 vel;								// Particle velocity
+	vec3 vel;								// Particle velocity
+	float mass;
 };
 
 // Binding 0 : Position storage buffer
@@ -40,7 +41,9 @@ vec2 repulsion(vec2 pos, vec2 attractPos)
 	return delta * (1.0 / (targetDistance * targetDistance * targetDistance)) * -0.000035;
 }
 
-layout (constant_id = 1) const float GRAVITY = 0.002;
+layout (constant_id = 1) const float GRAVITY = 0.02;
+layout (constant_id = 2) const float POWER = 0.75;
+layout (constant_id = 3) const float SOFTEN = 0.0075;
 
 void main() 
 {
@@ -66,7 +69,7 @@ void main()
 
 		vec4 dist = particles[i].pos - particles[index].pos;
 		vec4 direction = normalize(dist);
-		acceleration += direction * GRAVITY / dot(dist, dist);
+		acceleration += direction * GRAVITY / pow(dot(dist, dist) + SOFTEN, POWER);
 	}
 
 	vVel += (ubo.deltaT * acceleration);
@@ -78,16 +81,8 @@ void main()
 
 
     // Write back	
-	if ((vPos.x < -10.0) || (vPos.x > 10.0) || (vPos.y < -10.0) || (vPos.y > 10.0))
-    	vVel = (-vVel * 0.3);
-    else
+
     	particles[index].pos = vPos;
-
-	if (index == 0)
-		particles[index].pos = vec4(0.0);
-
-	if (index == 2)
-		particles[index].pos = vec4(2.0);
 
     particles[index].vel = vVel;
 
