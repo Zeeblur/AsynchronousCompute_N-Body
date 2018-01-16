@@ -32,16 +32,14 @@ void nbody::prepareParticles()
 		auto v2 = static_cast <float> (rand()) / (static_cast <float> (RAND_MAX / 20));
 		v2 -= 10;
 		p.pos = vec4(v1, v2, 0.0f, 0.0f);
-
-	//	p.pos = vec3(0.0, 0.0, 0.0f);
-		
+		p.vel = vec4(0.0);
 	}
 }
 
 void nbody::run()
 {
-	// loop here
-	prepareParticles();
+	// loop here  
+	prepareParticles();     
 	createSphereGeom(20, 20, vec3(0.2f));
 	Application::get()->setVertexData(vertexBuffer, indexBuffer, particleBuffer);
 

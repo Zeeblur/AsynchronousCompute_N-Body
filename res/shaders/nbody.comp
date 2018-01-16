@@ -40,41 +40,56 @@ vec2 repulsion(vec2 pos, vec2 attractPos)
 	return delta * (1.0 / (targetDistance * targetDistance * targetDistance)) * -0.000035;
 }
 
+layout (constant_id = 1) const float GRAVITY = 0.002;
+
 void main() 
 {
-/*
+
     // Current SSBO index
     uint index = gl_GlobalInvocationID.x;
 	// Don't try to write beyond particle count
-    if (index >= 4096) 
+    if (index >= ubo.particleCount) 
 		return;	
 
     // Read position and velocity
-    vec2 vVel = particles[index].vel.xy;
-    vec2 vPos = particles[index].pos.xy;
+    vec4 vVel = particles[index].vel;
+    vec4 vPos = particles[index].pos;
 
-    vec2 destPos = vec2(ubo.destX, ubo.destY);
+	// calculate acceleration
+	vec4 acceleration = vec4(0.0);
 
-    vec2 delta = destPos - vPos;
-    float targetDistance = sqrt(dot(delta, delta));
-    vVel += repulsion(vPos, destPos.xy) * 0.05;
+	// for each particle calculate force
+	for (int i = 0; i < ubo.particleCount; i++)
+	{
+		if (index == i)
+			continue;
 
-    // Move by velocity
+		vec4 dist = particles[i].pos - particles[index].pos;
+		vec4 direction = normalize(dist);
+		acceleration += direction * GRAVITY / dot(dist, dist);
+	}
+
+	vVel += (ubo.deltaT * acceleration);
+
+
+
+
     vPos += vVel * ubo.deltaT;
 
-    // collide with boundary
-    if ((vPos.x < -1.0) || (vPos.x > 1.0) || (vPos.y < -1.0) || (vPos.y > 1.0))
-    	vVel = (-vVel * 0.1) + attraction(vPos, destPos) * 12;
-    else
-    	particles[index].pos.xy = vPos;
 
-    // Write back
-    particles[index].vel.xy = vVel; */
-	//particles[gl_GlobalInvocationID.x].pos = vec3(0.0, 1.0, 1.0);
-	//particles[gl_GlobalInvocationID.y].pos = vec3(0.0, 1.0, 1.0);
-	//particles[0].pos = vec4(0.0, 1.0, 1.0, 0.0);
-	
-	// flashing
-	particles[gl_GlobalInvocationID.x].pos = particles[gl_GlobalInvocationID.x].pos;
+    // Write back	
+	if ((vPos.x < -10.0) || (vPos.x > 10.0) || (vPos.y < -10.0) || (vPos.y > 10.0))
+    	vVel = (-vVel * 0.3);
+    else
+    	particles[index].pos = vPos;
+
+	if (index == 0)
+		particles[index].pos = vec4(0.0);
+
+	if (index == 2)
+		particles[index].pos = vec4(2.0);
+
+    particles[index].vel = vVel;
+
 }
 

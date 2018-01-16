@@ -1909,7 +1909,7 @@ void Application::buildComputeCommandBuffer()
 	vkCmdBindDescriptorSets(compute.commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, compute.pipelineLayout, 0, 1, &compute.descriptorSet, 0, 0);
 
 	// Dispatch the compute     
-	vkCmdDispatch(compute.commandBuffer, 2, 1, 1);
+	vkCmdDispatch(compute.commandBuffer, PARTICLE_COUNT, 1, 1);
 
 	// Add memory barrier to ensure that compute shader has finished writing to the buffer
 	// Without this the (rendering) vertex shader may display incomplete results (partial data from last frame) 
@@ -2022,7 +2022,7 @@ void Application::prepareCompute()
 	VkDescriptorBufferInfo bufferInfo = {};
 	bufferInfo.buffer = buffers[INSTANCE]->buffer;
 	bufferInfo.offset = 0;
-	bufferInfo.range = sizeof(particle) * buffers[INSTANCE]->size;
+	bufferInfo.range = sizeof(particle) * buffers[INSTANCE]->size;  //  BUFFER SIZE FOR COMPUTE!
 
 
 	VkDescriptorBufferInfo UBI = {};
@@ -2120,17 +2120,19 @@ void Application::updateCompute()
 	memcpy(compute.mapped, &compute.ubo, sizeof(compute.ubo));
 	vkUnmapMemory(device, compute.uboMem);
 
-	if (returnParticles == nullptr)
-		return;
-	   
-	for (int i = 0; i < 2; ++i) { 
-		std::cout << "Return " << i << ": "
-			<< ((particle *)returnParticles)[i].pos.x << " "
-			<< ((particle *)returnParticles)[i].pos.y << " "
-			<< ((particle *)returnParticles)[i].pos.z << " "
-			<< ((particle *)returnParticles)[i].vel.x << " "
-			<< ((particle *)returnParticles)[i].vel.y << " "
-			<< ((particle *)returnParticles)[i].vel.z << " "
-			<< std::endl;
- 	}    
+
+ //   //print buffer
+	//if (returnParticles == nullptr)
+	//	return;
+	//   
+	//for (int i = 0; i < 2; ++i) { 
+	//	std::cout << "Return " << i << ": "
+	//		<< ((particle *)returnParticles)[i].pos.x << " "
+	//		<< ((particle *)returnParticles)[i].pos.y << " "
+	//		<< ((particle *)returnParticles)[i].pos.z << " "
+	//		<< ((particle *)returnParticles)[i].vel.x << " "
+	//		<< ((particle *)returnParticles)[i].vel.y << " "
+	//		<< ((particle *)returnParticles)[i].vel.z << " "
+	//		<< std::endl;
+ //	}    
 }

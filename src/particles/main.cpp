@@ -3,7 +3,7 @@
 
 int main() {
 
-	nbody simulation(2);
+	nbody simulation(1<<6);
 
 	try
 	{
