@@ -22,7 +22,7 @@ void nbody::prepareParticles()
 {
 	particleBuffer.resize(num_particles);
 
-	// create positions for particles
+	// create positions for particles 
 	for (auto &p : particleBuffer)
 	{
 		//set rnd position
@@ -31,7 +31,7 @@ void nbody::prepareParticles()
 
 		auto v2 = static_cast <float> (rand()) / (static_cast <float> (RAND_MAX / 20));
 		v2 -= 10;
-		p.pos = vec3(v1, v2, 0.0f);
+		p.pos = vec4(v1, v2, 0.0f, 0.0f);
 
 	//	p.pos = vec3(0.0, 0.0, 0.0f);
 		

@@ -1878,7 +1878,7 @@ void Application::buildComputeCommandBuffer()
 	cmdBufInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 
 	if (vkBeginCommandBuffer(compute.commandBuffer, &cmdBufInfo) != VK_SUCCESS)
-		throw std::runtime_error("Failed to create compute command buffer"); 
+		throw std::runtime_error("Failed to create compute command buffer");
 
 	// Compute particle movement
 
@@ -1908,7 +1908,7 @@ void Application::buildComputeCommandBuffer()
 	vkCmdBindPipeline(compute.commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, compute.pipeline);
 	vkCmdBindDescriptorSets(compute.commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, compute.pipelineLayout, 0, 1, &compute.descriptorSet, 0, 0);
 
-	// Dispatch the compute job
+	// Dispatch the compute     
 	vkCmdDispatch(compute.commandBuffer, 2, 1, 1);
 
 	// Add memory barrier to ensure that compute shader has finished writing to the buffer
@@ -1932,6 +1932,13 @@ void Application::buildComputeCommandBuffer()
 		0, nullptr);
 
 	vkEndCommandBuffer(compute.commandBuffer);
+
+
+
+	// get memory back and count
+	vkMapMemory(device, buffers[INSTANCE]->memory, 0, buffers[INSTANCE]->size * sizeof(particle), 0, &returnParticles);
+
+
 }
 
 void Application::createComputeUBO()
@@ -2015,7 +2022,7 @@ void Application::prepareCompute()
 	VkDescriptorBufferInfo bufferInfo = {};
 	bufferInfo.buffer = buffers[INSTANCE]->buffer;
 	bufferInfo.offset = 0;
-	bufferInfo.range = sizeof(particle);
+	bufferInfo.range = sizeof(particle) * buffers[INSTANCE]->size;
 
 
 	VkDescriptorBufferInfo UBI = {};
@@ -2112,4 +2119,18 @@ void Application::updateCompute()
 	vkMapMemory(device, compute.uboMem, 0, sizeof(compute.ubo), 0, &compute.mapped);
 	memcpy(compute.mapped, &compute.ubo, sizeof(compute.ubo));
 	vkUnmapMemory(device, compute.uboMem);
+
+	if (returnParticles == nullptr)
+		return;
+	   
+	for (int i = 0; i < 2; ++i) { 
+		std::cout << "Return " << i << ": "
+			<< ((particle *)returnParticles)[i].pos.x << " "
+			<< ((particle *)returnParticles)[i].pos.y << " "
+			<< ((particle *)returnParticles)[i].pos.z << " "
+			<< ((particle *)returnParticles)[i].vel.x << " "
+			<< ((particle *)returnParticles)[i].vel.y << " "
+			<< ((particle *)returnParticles)[i].vel.z << " "
+			<< std::endl;
+ 	}    
 }
