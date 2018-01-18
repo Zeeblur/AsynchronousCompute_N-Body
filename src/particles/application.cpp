@@ -73,9 +73,31 @@ void Application::mainLoop()
 	while (!glfwWindowShouldClose(window))
 	{
 		glfwPollEvents();
+
+		// start timer
+		auto startTime = std::chrono::high_resolution_clock::now();
+
+
+
 		updateUniformBuffer();   // update
 		drawFrame();			 // render
-		updateCompute();
+		updateCompute();		 // update 
+
+		frameCounter++;
+		auto endTime = std::chrono::high_resolution_clock::now();
+		auto deltaT = std::chrono::duration<double, std::milli>(endTime - startTime).count();
+		frameTimer = (float)deltaT / 1000.0f;
+		fpsTimer += (float)deltaT;
+		if (fpsTimer > 1000.0f)
+		{
+			lastFPS = static_cast<uint32_t>(1.0f / frameTimer);
+			//updateTextOverlay();
+
+			std::cout << std::fixed << (frameTimer * 1000.0f) << "ms (" << lastFPS << " fps)" << std::endl;
+
+			fpsTimer = 0.0f;
+			frameCounter = 0;
+		}
 	}
 
 	vkDeviceWaitIdle(device);
@@ -1936,7 +1958,7 @@ void Application::buildComputeCommandBuffer()
 
 
 	// get memory back and count
-	vkMapMemory(device, buffers[INSTANCE]->memory, 0, buffers[INSTANCE]->size * sizeof(particle), 0, &returnParticles);
+	//vkMapMemory(device, buffers[INSTANCE]->memory, 0, buffers[INSTANCE]->size * sizeof(particle), 0, &returnParticles);
 
 
 }
@@ -2118,7 +2140,7 @@ void Application::updateCompute()
 	float frameTime = std::chrono::duration_cast<std::chrono::milliseconds>(newTime - currentTime).count(); 
 	currentTime = newTime;  
 	 
-	compute.ubo.deltaT = std::min(frameTime / 1000, 1 / 60.0f) / 0.2;
+	compute.ubo.deltaT = (frameTimer);
 	compute.ubo.destX = 0.75f; 
 	compute.ubo.destY = 0.0f;
 	vkMapMemory(device, compute.uboMem, 0, sizeof(compute.ubo), 0, &compute.mapped);
