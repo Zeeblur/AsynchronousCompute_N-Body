@@ -294,8 +294,6 @@ private:
 
 	// transfer command buffers
 	VkCommandBuffer transferCmdBuffer;
-	void buildTransferCommandBuffer();
-
 	void drawFrame();
 	void updateUniformBuffer();
 
@@ -394,6 +392,11 @@ struct BufferObject
 	VkDeviceMemory memory = VK_NULL_HANDLE;
 	size_t size = 0;
 
+	// create another buffer...
+	VkBuffer drawStorageBuffer = VK_NULL_HANDLE;
+	VkDeviceMemory drawMemory = VK_NULL_HANDLE;
+	size_t drawSize = 0;
+
 	virtual void createBuffer() = 0;
 
 	~BufferObject()
@@ -472,6 +475,17 @@ struct IndexBO : BufferObject
 
 struct InstanceBO : BufferObject
 {
+
+
+
+
+	// Staging
+	// SSBO is static, copy to device local memory 
+	//// This results in better performance
+	//computeStorageBuffer = stageToDeviceBuffer(vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferSrc, particleBuffer);
+	//drawStorageBuffer = stageToDeviceBuffer(vk::BufferUsageFlagBits::eVertexBuffer, particleBuffer);
+
+	// compute storageBuffer = buffer
 	std::vector<particle> particles;
 	void createBuffer()
 	{
@@ -495,13 +509,49 @@ struct InstanceBO : BufferObject
 
 		// note usage is INDEX buffer. and storage for compute
 		Application::get()->createBuffer(bufferSize,
-			VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
 			//  for getting data back VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
 			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
 			buffer,
 			memory); 
 
 		Application::get()->copyBuffer(stagingBuffer, buffer, bufferSize);
+
+		vkDestroyBuffer(*dev, stagingBuffer, nullptr);
+		vkFreeMemory(*dev, stagingBufferMemory, nullptr);
+	
+		// create draw storage buff (VERTEX)
+		createDrawStorage();
+	}
+
+	void createDrawStorage()
+	{
+		// buffersize is the number of incides times the size of the index type (unit32/16)
+		VkDeviceSize bufferSize = sizeof(particles[0]) * particles.size();
+		size = particles.size();
+
+		VkBuffer stagingBuffer;
+		VkDeviceMemory stagingBufferMemory;
+		Application::get()->createBuffer(bufferSize,
+			VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+			stagingBuffer,
+			stagingBufferMemory);
+
+		void* data;
+		vkMapMemory(*dev, stagingBufferMemory, 0, bufferSize, 0, &data);
+		memcpy(data, particles.data(), (size_t)bufferSize);
+		vkUnmapMemory(*dev, stagingBufferMemory);
+
+		// note usage is INDEX buffer. and storage for compute
+		Application::get()->createBuffer(bufferSize,
+			VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+			//  for getting data back VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+			drawStorageBuffer,
+			drawMemory);
+
+		Application::get()->copyBuffer(stagingBuffer, drawStorageBuffer, bufferSize);
 
 		vkDestroyBuffer(*dev, stagingBuffer, nullptr);
 		vkFreeMemory(*dev, stagingBufferMemory, nullptr);
