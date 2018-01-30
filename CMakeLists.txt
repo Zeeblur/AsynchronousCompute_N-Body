@@ -68,6 +68,14 @@ target_link_libraries (particles  ${EXTRA_LIBS})
 add_custom_command(TARGET particles POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E copy_directory  "${PROJECT_SOURCE_DIR}/res" $<TARGET_FILE_DIR:particles>/res)
 
+file(GLOB_RECURSE SOURCES3 src/asyncParticles/*.cpp src/asyncParticles/*.h external/*.h)
+add_executable(asyncParticles ${SOURCES3})
+target_link_libraries (asyncParticles  ${EXTRA_LIBS})
+  
 target_link_libraries(particles glfw)
 target_link_libraries(particles vulkan-1)
 target_include_directories(particles PRIVATE external/)
+
+target_link_libraries(asyncParticles glfw)
+target_link_libraries(asyncParticles vulkan-1)
+target_include_directories(asyncParticles PRIVATE external/)
