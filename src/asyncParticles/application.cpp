@@ -1374,7 +1374,8 @@ void Application::copyComputeResults()
 	submitInfo.commandBufferCount = 1;
 	submitInfo.pCommandBuffers = &transferCmdBuffer;
 	// Submit to queue (maybe graphics?)
-	if (vkQueueSubmit(graphicsQueue, 1, &submitInfo, compute.fence) != VK_SUCCESS)
+	VkFence fence = VK_NULL_HANDLE;
+	if (vkQueueSubmit(graphicsQueue, 1, &submitInfo, fence) != VK_SUCCESS)
 			throw std::runtime_error("failed to submit gfx queue");
 
 }
@@ -1388,6 +1389,8 @@ void Application::drawFrame()
 		copyComputeResults();
 		vkDestroyFence(device, compute.fence, nullptr);
 		compute.fence = nullptr;// new fence;
+		VkFence newFence = VK_NULL_HANDLE;
+		compute.fence = newFence;
 	}
 
 	if (!compute.fence)
@@ -1396,7 +1399,7 @@ void Application::drawFrame()
 		// Fence for compute CB sync
 		VkFenceCreateInfo fenceCreateInfo{};
 		fenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-		fenceCreateInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+		//fenceCreateInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 		if (vkCreateFence(device, &fenceCreateInfo, nullptr, &compute.fence) != VK_SUCCESS)
 			throw std::runtime_error("Failed creating compute fence");
 		
@@ -1987,7 +1990,7 @@ void Application::buildComputeCommandBuffer()
 
 
 	VkBufferMemoryBarrier drawBarrier{};
-
+	drawBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
 	drawBarrier.srcAccessMask = VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT;
 	drawBarrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
 	drawBarrier.buffer = buffers[INSTANCE]->drawStorageBuffer;
