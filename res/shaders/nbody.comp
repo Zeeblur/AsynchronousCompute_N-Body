@@ -23,13 +23,15 @@ layout (binding = 1) uniform UBO
 	int particleCount;
 } ubo;
 
+layout (constant_id = 0) const int SHARED_DATA_SIZE = 512;
 layout (constant_id = 1) const float GRAVITY = 0.02;
 layout (constant_id = 2) const float POWER = 0.75;
 layout (constant_id = 3) const float SOFTEN = 0.0075;
 
+shared vec4 sharedData[SHARED_DATA_SIZE];
+
 void main() 
 {
-
     // Current SSBO index
     uint index = gl_GlobalInvocationID.x;
 	// Don't try to write beyond particle count
@@ -43,6 +45,8 @@ void main()
 	// calculate acceleration
 	vec3 acceleration = vec3(0.0);
 
+
+
 	// for each particle calculate force
 	for (int i = 0; i < ubo.particleCount; i++)
 	{
@@ -53,22 +57,18 @@ void main()
 		vec3 direction = normalize(dist);
 
 		//float mass = particles[i].mass * particles[index].mass;
-		float denum = pow(dot(dist, dist) + SOFTEN, POWER);
-		denum = max(0.0001, denum);
-		acceleration += direction * GRAVITY /denum;
+		acceleration += direction * GRAVITY / pow(dot(dist, dist) + SOFTEN, POWER);
 	}
 
-	vVel += (ubo.deltaT * acceleration);
+	float deltaT = max(0, ubo.deltaT);
+	vVel += (deltaT * acceleration);
 
 
-    vPos += vVel * ubo.deltaT;
+    vPos += vVel * deltaT;
 
 
     // Write back	
     particles[index].pos.xyz = vPos;
     particles[index].vel.xyz = vVel;
-	
-	//particles[index].pos.xyz = vec3(2.0);
-	//particles[index].vel.xyz = vec3(5.0);
 }
 
