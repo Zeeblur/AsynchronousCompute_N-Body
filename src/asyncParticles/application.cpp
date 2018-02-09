@@ -76,9 +76,9 @@ void Application::mainLoop()
 
 		// start timer
 		auto startTime = std::chrono::high_resolution_clock::now();
+		 
 
-
-
+		 
 		updateUniformBuffer();   // update
 		drawFrame();			 // render
 		updateCompute();		 // update 
@@ -1949,64 +1949,61 @@ int Application::findComputeQueueFamily(VkPhysicalDevice pd)
 void Application::buildComputeCommandBuffer()
 {
 	// create command buffer
+	// Compute: Begin, bind pipeline, bind desc sets, dispatch calls, end.
+
+	// begin
 	VkCommandBufferBeginInfo cmdBufInfo{};
 	cmdBufInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 
 	if (vkBeginCommandBuffer(compute.commandBuffer, &cmdBufInfo) != VK_SUCCESS)
-		throw std::runtime_error("Failed to create compute command buffer");
+		throw std::runtime_error("Compute command buffer failed to start");
 
-	// Compute particle movement
-
-	// Add memory barrier to ensure that the (graphics) vertex shader has fetched attributes before compute starts to write to the buffer
-	VkBufferMemoryBarrier bufferBarrier{};
-	bufferBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-	bufferBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-	bufferBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-	bufferBarrier.buffer = buffers[INSTANCE]->buffer;
-	//bufferBarrier.size = VK_WHOLE_SIZE;
-	bufferBarrier.srcAccessMask = VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT;						// Vertex shader invocations have finished reading from the buffer
-	bufferBarrier.dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT;								// Compute shader wants to write to the buffer
-																							// Compute and graphics queue may have different queue families (see VulkanDevice::createLogicalDevice)
-																							// For the barrier to work across different queues, we need to set their family indices
-	bufferBarrier.srcQueueFamilyIndex = queueFamilyIndices.graphics;			// Required as compute and graphics queue may have different families
-	bufferBarrier.dstQueueFamilyIndex = queueFamilyIndices.compute;			// Required as compute and graphics queue may have different families
-
-	vkCmdPipelineBarrier(
-		compute.commandBuffer,
-		VK_PIPELINE_STAGE_VERTEX_SHADER_BIT,
-		VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-		VK_FLAGS_NONE,
-		0, nullptr,
-		1, &bufferBarrier,
-		0, nullptr);
-
+	// bind pipeline & desc sets
 	vkCmdBindPipeline(compute.commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, compute.pipeline);
 	vkCmdBindDescriptorSets(compute.commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, compute.pipelineLayout, 0, 1, &compute.descriptorSet, 0, 0);
 
-	// Dispatch the compute     
+	// dispatch shader
 	vkCmdDispatch(compute.commandBuffer, PARTICLE_COUNT, 1, 1);
 
+	// end cmd writing
 	vkEndCommandBuffer(compute.commandBuffer);
 
+	// Set up memory barriers
+	// need for compute and draw
 
-	VkBufferMemoryBarrier drawBarrier{};
+	VkBufferMemoryBarrier computeBarrier, drawBarrier;
+	computeBarrier.srcQueueFamilyIndex = 0;
+	computeBarrier.dstQueueFamilyIndex = 0;
+	computeBarrier.offset = 0;
+	computeBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+	computeBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT;
+	computeBarrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+	computeBarrier.buffer = buffers[INSTANCE]->buffer; // comput storgae buffer
+	computeBarrier.size = buffers[INSTANCE]->size * sizeof(particle); // desc range
+
+	computeBarrier.pNext = nullptr;
+	drawBarrier.pNext = nullptr;  
+
+	// draw barrier
+	drawBarrier.srcQueueFamilyIndex = 0;
+	drawBarrier.dstQueueFamilyIndex = 0;
+	drawBarrier.offset = 0;
 	drawBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
 	drawBarrier.srcAccessMask = VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT;
 	drawBarrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
 	drawBarrier.buffer = buffers[INSTANCE]->drawStorageBuffer;
-	drawBarrier.size = buffers[INSTANCE]->size; // descriptor range....
-	
-	//buildTransferCommandBuffer();
-	// create command buffer
-	VkCommandBufferBeginInfo cmdBufInfo2{};
-	cmdBufInfo2.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-
-	if (vkBeginCommandBuffer(transferCmdBuffer, &cmdBufInfo2) != VK_SUCCESS)
-		throw std::runtime_error("Failed to create transfer command buffer");
+	drawBarrier.size = buffers[INSTANCE]->size * sizeof(particle);
 
 
-	VkBufferMemoryBarrier memBarriers[] = { bufferBarrier, drawBarrier };
+	// begin writing to transfer cmd buffer
+	// set up pipeline barrier, copy buffer, change barriers, end.
+	if (vkBeginCommandBuffer(transferCmdBuffer, &cmdBufInfo) != VK_SUCCESS)
+		throw std::runtime_error("transfer command buffer failed to start");
 
+
+	VkBufferMemoryBarrier memBarriers[] = { computeBarrier, drawBarrier };
+
+	// barrier to transfer
 	vkCmdPipelineBarrier(
 		transferCmdBuffer,
 		VK_PIPELINE_STAGE_TRANSFER_BIT,
@@ -2016,13 +2013,19 @@ void Application::buildComputeCommandBuffer()
 		2, memBarriers,
 		0, nullptr);
 
-	copyBuffer(buffers[INSTANCE]->buffer, buffers[INSTANCE]->drawStorageBuffer, buffers[INSTANCE]->size);
-	
-	bufferBarrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-	bufferBarrier.dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT;
+	// Copy buffers
+	VkBufferCopy copyRegion = {};
+	copyRegion.size = buffers[INSTANCE]->size * sizeof(particle);
+	vkCmdCopyBuffer(transferCmdBuffer, buffers[INSTANCE]->buffer, buffers[INSTANCE]->drawStorageBuffer, 1, &copyRegion);
+
+
+	// update barrier
+	computeBarrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+	computeBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
 	drawBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
 	drawBarrier.dstAccessMask = VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT;
-	
+
+	// barrier to transfer
 	vkCmdPipelineBarrier(
 		transferCmdBuffer,
 		VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
@@ -2031,31 +2034,9 @@ void Application::buildComputeCommandBuffer()
 		0, nullptr,
 		2, memBarriers,
 		0, nullptr);
-	
 
+	// end tra writing
 	vkEndCommandBuffer(transferCmdBuffer);
-
-	//// Add memory barrier to ensure that compute shader has finished writing to the buffer
-	//// Without this the (rendering) vertex shader may display incomplete results (partial data from last frame) 
-	//bufferBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;								// Compute shader has finished writes to the buffer
-	//bufferBarrier.dstAccessMask = VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT;						// Vertex shader invocations want to read from the buffer
-	//bufferBarrier.buffer = buffers[INSTANCE]->buffer;
-	////bufferBarrier.size = VK_WHOLE_SIZE;
-	//// Compute and graphics queue may have different queue families (see VulkanDevice::createLogicalDevice)
-	//// For the barrier to work across different queues, we need to set their family indices
-	//bufferBarrier.srcQueueFamilyIndex = queueFamilyIndices.compute;			// Required as compute and graphics queue may have different families
-	//bufferBarrier.dstQueueFamilyIndex = queueFamilyIndices.graphics;			// Required as compute and graphics queue may have different families
-
-	//vkCmdPipelineBarrier(
-	//	compute.commandBuffer,
-	//	VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-	//	VK_PIPELINE_STAGE_VERTEX_SHADER_BIT,
-	//	VK_FLAGS_NONE,
-	//	0, nullptr,
-	//	1, &bufferBarrier,
-	//	0, nullptr);
-
-
 }
 
 void Application::createComputeUBO()
@@ -2224,11 +2205,13 @@ void Application::prepareCompute()
 	if(vkCreateFence(device, &fenceCreateInfo, nullptr, &compute.fence) != VK_SUCCESS)
 		throw std::runtime_error("Failed creating compute fence");
 
-
+	
 	vkDestroyShaderModule(device, computeShaderMod, nullptr);
 
 	// Build a single command buffer containing the compute dispatch commands
 	buildComputeCommandBuffer();
+
+	vkMapMemory(device, buffers[INSTANCE]->memory, 0, buffers[INSTANCE]->size * sizeof(particle), 0, &returnParticles);
 }
 
 void Application::updateCompute()
@@ -2246,18 +2229,18 @@ void Application::updateCompute()
 	vkUnmapMemory(device, compute.uboMem);
 
 
- //   //print buffer
-	//if (returnParticles == nullptr)
-	//	return;
-	//   
-	//for (int i = 0; i < 2; ++i) { 
-	//	std::cout << "Return " << i << ": "
-	//		<< ((particle *)returnParticles)[i].pos.x << " "
-	//		<< ((particle *)returnParticles)[i].pos.y << " "
-	//		<< ((particle *)returnParticles)[i].pos.z << " "
-	//		<< ((particle *)returnParticles)[i].vel.x << " "
-	//		<< ((particle *)returnParticles)[i].vel.y << " "
-	//		<< ((particle *)returnParticles)[i].vel.z << " "
-	//		<< std::endl;
- //	}    
+    //print buffer
+	if (returnParticles == nullptr)
+		return;
+	   
+	for (int i = 0; i < 2; ++i) { 
+		std::cout << "Return " << i << ": "
+			<< ((particle *)returnParticles)[i].pos.x << " "
+			<< ((particle *)returnParticles)[i].pos.y << " "
+			<< ((particle *)returnParticles)[i].pos.z << " "
+			<< ((particle *)returnParticles)[i].vel.x << " "
+			<< ((particle *)returnParticles)[i].vel.y << " "
+			<< ((particle *)returnParticles)[i].vel.z << " "
+			<< std::endl;
+ 	}    
 }
