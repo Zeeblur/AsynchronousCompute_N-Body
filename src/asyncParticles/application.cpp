@@ -277,16 +277,21 @@ void Application::pickPhysicalDevice()
 	if (deviceCount == 0)
 		throw std::runtime_error("Failed to find GPU with Vulkan support!");
 
+	//std::vector<VkPhysicalDevice> twodev;
+
 	for (const auto& dev : devices)
 	{
 		std::cout << "checking device" << std::endl;
 
 		if (isDeviceSuitable(dev)) 
 		{
-			physicalDevice = dev;
+			physicalDevice =dev;  // add JUST AMD
 			break;
 		}
 	}
+
+
+	
 
 	if (physicalDevice == VK_NULL_HANDLE)
 		throw std::runtime_error("failed to find a suitable GPU!");
@@ -1680,6 +1685,14 @@ bool Application::isDeviceSuitable(VkPhysicalDevice device)
 	vkGetPhysicalDeviceProperties(device, &deviceProperties);
 	vkGetPhysicalDeviceFeatures(device, &deviceFeatures);
 
+	// Don't choose 1080
+	char *output = NULL;
+	output = strstr(deviceProperties.deviceName, "GTX");
+	if (output) {
+		printf("1080 Found");
+		return false;
+	}
+
 	// is this a discrete gpu and does it have geom capabilities 
 	bool physical = deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU &&
 		deviceFeatures.geometryShader;
@@ -2152,7 +2165,7 @@ void Application::prepareCompute()
 	vkUpdateDescriptorSets(device, static_cast<uint32_t>(computeWriteDescriptorSets.size()), computeWriteDescriptorSets.data(), 0, NULL);
 
 	// Create pipeline
-
+	 
 	// create shader module
 	auto computeShaderCode = readFile("res/shaders/comp.spv");
 
@@ -2211,7 +2224,7 @@ void Application::prepareCompute()
 	// Build a single command buffer containing the compute dispatch commands
 	buildComputeCommandBuffer();
 
-	vkMapMemory(device, buffers[INSTANCE]->memory, 0, buffers[INSTANCE]->size * sizeof(particle), 0, &returnParticles);
+	//vkMapMemory(device, buffers[INSTANCE]->memory, 0, buffers[INSTANCE]->size * sizeof(particle), 0, &returnParticles);
 }
 
 void Application::updateCompute()
@@ -2229,18 +2242,18 @@ void Application::updateCompute()
 	vkUnmapMemory(device, compute.uboMem);
 
 
-    //print buffer
-	if (returnParticles == nullptr)
-		return;
-	   
-	for (int i = 0; i < 2; ++i) { 
-		std::cout << "Return " << i << ": "
-			<< ((particle *)returnParticles)[i].pos.x << " "
-			<< ((particle *)returnParticles)[i].pos.y << " "
-			<< ((particle *)returnParticles)[i].pos.z << " "
-			<< ((particle *)returnParticles)[i].vel.x << " "
-			<< ((particle *)returnParticles)[i].vel.y << " "
-			<< ((particle *)returnParticles)[i].vel.z << " "
-			<< std::endl;
- 	}    
+ //   //print buffer
+	//if (returnParticles == nullptr)
+	//	return;
+	//   
+	//for (int i = 0; i < 2; ++i) { 
+	//	std::cout << "Return " << i << ": "
+	//		<< ((particle *)returnParticles)[i].pos.x << " "
+	//		<< ((particle *)returnParticles)[i].pos.y << " "
+	//		<< ((particle *)returnParticles)[i].pos.z << " "
+	//		<< ((particle *)returnParticles)[i].vel.x << " "
+	//		<< ((particle *)returnParticles)[i].vel.y << " "
+	//		<< ((particle *)returnParticles)[i].vel.z << " "
+	//		<< std::endl; 
+ //	}    
 }

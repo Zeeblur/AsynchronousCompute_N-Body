@@ -7,6 +7,9 @@ set (CMAKE_CXX_STANDARD 11)
 # add the binary tree to the search path for include files
 include_directories ("${PROJECT_BINARY_DIR}")
 
+SET(OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
+SET (CMAKE_RUNTIME_OUTPUT_DIRECTORY ${OUTPUT_DIRECTORY})
+
 include(DownloadProject.cmake)
 
 # don't download glfw project shit
@@ -43,30 +46,33 @@ include_directories("${glm_SOURCE_DIR}")
 
 
 # add the exes
-# Add all files from a src folder
-file(GLOB_RECURSE SOURCES src/triangle/*.cpp src/triangle/*.h external/*.h)
 
-#file(GLOB_RECURSE SHADERS res/shaders/*.vert res/shaders/*.frag)
+
+## TRIANGLE TEST:
+file(GLOB_RECURSE SOURCES src/triangle/*.cpp src/triangle/*.h external/*.h)
 
 add_executable(vulkantest ${SOURCES})
 target_link_libraries (vulkantest  ${EXTRA_LIBS})
 
-add_custom_command(TARGET vulkantest POST_BUILD
-  COMMAND ${CMAKE_COMMAND} -E copy_directory  "${PROJECT_SOURCE_DIR}/res" $<TARGET_FILE_DIR:vulkantest>/res)
-
+#add_custom_command(TARGET copyRes POST_BUILD
+#  COMMAND ${CMAKE_COMMAND} -E copy_directory   "${PROJECT_SOURCE_DIR}/res" "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/$<CONFIG>/res")
+  
 target_link_libraries(vulkantest glfw)
 target_link_libraries(vulkantest vulkan-1)
 target_include_directories(vulkantest PRIVATE external/)
 
-file(GLOB_RECURSE SOURCES2 src/particles/*.cpp src/particles/*.h external/*.h)
+## PARTICLES:
 
-#file(GLOB_RECURSE SHADERS res/shaders/*.vert res/shaders/*.frag)
+file(GLOB_RECURSE SOURCES2 src/particles/*.cpp src/particles/*.h external/*.h)
 
 add_executable(particles ${SOURCES2})
 target_link_libraries (particles  ${EXTRA_LIBS})
 
-add_custom_command(TARGET particles POST_BUILD
-  COMMAND ${CMAKE_COMMAND} -E copy_directory  "${PROJECT_SOURCE_DIR}/res" $<TARGET_FILE_DIR:particles>/res)
+#add_custom_command(TARGET particles POST_BUILD
+ # COMMAND ${CMAKE_COMMAND} -E copy_directory  "${PROJECT_SOURCE_DIR}/res" $<TARGET_FILE_DIR:particles>/res)
+  
+
+## ASYNC:
 
 file(GLOB_RECURSE SOURCES3 src/asyncParticles/*.cpp src/asyncParticles/*.h external/*.h)
 add_executable(asyncParticles ${SOURCES3})
@@ -79,3 +85,12 @@ target_include_directories(particles PRIVATE external/)
 target_link_libraries(asyncParticles glfw)
 target_link_libraries(asyncParticles vulkan-1)
 target_include_directories(asyncParticles PRIVATE external/)
+
+#add_custom_command(TARGET asyncParticles POST_BUILD
+ # COMMAND ${CMAKE_COMMAND} -E copy_directory   "${PROJECT_SOURCE_DIR}/res" "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/$<CONFIG>/res")
+  
+add_custom_target(copy_res ALL COMMAND ${CMAKE_COMMAND} -E copy_directory "${PROJECT_SOURCE_DIR}/res" "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/$<CONFIG>/res") 
+
+add_dependencies(asyncParticles
+	copyRes
+)

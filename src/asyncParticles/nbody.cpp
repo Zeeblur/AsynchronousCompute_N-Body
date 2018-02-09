@@ -32,6 +32,9 @@ void nbody::prepareParticles()
 		auto v2 = static_cast <float> (rand()) / (static_cast <float> (RAND_MAX / 20));
 		v2 -= 10;
 
+		auto v3 = static_cast <float> (rand()) / (static_cast <float> (RAND_MAX / 20));
+		v3 -= 10;
+
 		auto massRNG = static_cast <float> (rand()) / (static_cast <float> (RAND_MAX / 200));
 
 		auto mass = 1.0;
@@ -39,7 +42,7 @@ void nbody::prepareParticles()
 		if (massRNG < 150)
 			mass = 1.0;
 
-		p.pos = vec4(v1, v2, 0.0f, 100);
+		p.pos = vec4(v1, v2, 0, 100);
 		p.vel = vec4(0.0);
 
 		auto rndM = static_cast <float> (rand()) / (static_cast <float> (RAND_MAX / 200));
