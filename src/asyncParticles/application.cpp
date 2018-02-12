@@ -307,13 +307,14 @@ void Application::createLogicalDevice()
 	QueueFamilyIndices indices = findQueuesFamilies(physicalDevice);
 
 	std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
-	std::set<int> uniqueQFamilies = { indices.graphicsFamily, indices.presentFamily };
+	std::set<int> uniqueQFamilies = { indices.graphicsFamily, indices.presentFamily, indices.computeFamily };
 	
 	queueFamilyIndices.graphics = indices.graphicsFamily;
+	queueFamilyIndices.compute = indices.computeFamily;
 	queueFamilyIndices.present = indices.presentFamily;
 
 	// influence sheduling of the command buffer (NEEDED EVEN IF ONLY 1 Q)
-	float queuePriority = 1.0f;
+	float queuePriority[2] = { 1.0f, 1.0f };
 
 	// for each unique queue family, create a new info for them and add to list
 	for (int queueFam : uniqueQFamilies)
@@ -328,8 +329,8 @@ void Application::createLogicalDevice()
 		// this is either graphics/surface etc
 		qCreateInfo.queueFamilyIndex = queueFam;
 
-		qCreateInfo.pQueuePriorities = &queuePriority;
-		qCreateInfo.queueCount = 1;
+		qCreateInfo.pQueuePriorities = queuePriority;
+		qCreateInfo.queueCount = (queueFam == indices.graphicsFamily && queueFam == indices.computeFamily) ? 2 : 1;
 
 		// add to list
 		queueCreateInfos.push_back(qCreateInfo);
@@ -366,7 +367,11 @@ void Application::createLogicalDevice()
 		throw std::runtime_error("Failed to create logical device!");
 
 	vkGetDeviceQueue(device, indices.graphicsFamily, 0, &graphicsQueue);
-	vkGetDeviceQueue(device, indices.presentFamily, 0, &presentQueue);
+	vkGetDeviceQueue(device, indices.presentFamily, (indices.graphicsFamily == indices.computeFamily) ? 1 : 0, &presentQueue);
+	vkGetDeviceQueue(device, indices.computeFamily, 0, &compute.queue);
+
+	std::cout << "Graphics queue: " << graphicsQueue << std::endl;
+	std::cout << "Compute queue: " << compute.queue << std::endl;
 	
 }
 
@@ -408,7 +413,6 @@ void Application::createSwapChain()
 
 	// transfer to colour - not to a texture - no post-processing for now.
 	createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-
 
 	// specify how to handle images from different queues.
 	QueueFamilyIndices indices = findQueuesFamilies(physicalDevice);
@@ -1380,7 +1384,7 @@ void Application::copyComputeResults()
 	submitInfo.pCommandBuffers = &transferCmdBuffer;
 	// Submit to queue (maybe graphics?)
 	VkFence fence = VK_NULL_HANDLE;
-	if (vkQueueSubmit(graphicsQueue, 1, &submitInfo, fence) != VK_SUCCESS)
+	if (vkQueueSubmit(compute.queue, 1, &submitInfo, fence) != VK_SUCCESS)
 			throw std::runtime_error("failed to submit gfx queue");
 
 }
@@ -1801,18 +1805,29 @@ QueueFamilyIndices Application::findQueuesFamilies(VkPhysicalDevice device)
 	unsigned int i = 0;
 	for (const auto& queueFamily : queueFamilies)
 	{
+		// check for avail queue families
+		int queueCount = queueFamily.queueCount;
+		if (queueCount > 0)
+		{
+			queueCount--;
+			// don't use same queue fam twice - unlesss it's got multiple queues
+			// check for drawing command support
+			if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)
+				indices.graphicsFamily = i;
 
-		// check for presentation support to window
-		VkBool32 presentSupport = false;
-		vkGetPhysicalDeviceSurfaceSupportKHR(device, i, surface, &presentSupport);
-		if (queueFamily.queueCount > 0 && presentSupport)
-			indices.presentFamily = i;
-	
+			// check for compute support & if unused queue
+			if (queueCount > 0 && queueFamily.queueFlags & VK_QUEUE_COMPUTE_BIT)
+				indices.computeFamily = i;
 
-		// check for drawing command support
-		if (queueFamily.queueCount > 0 && queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)
-			indices.graphicsFamily = i;
-	
+			// check for presentation support to window
+			VkBool32 presentSupport = false;
+			vkGetPhysicalDeviceSurfaceSupportKHR(device, i, surface, &presentSupport);
+			if (presentSupport)
+				indices.presentFamily = i;
+
+		}
+
+		// check all have been assigned
 		if (indices.isComplete())
 			break;
 
@@ -1929,36 +1944,6 @@ void Application::setVertexData(const std::vector<Vertex> vert, const std::vecto
 
 }
 
-int Application::findComputeQueueFamily(VkPhysicalDevice pd)
-{
-	// find and return the index of compute queue family for device
-
-	int index = -1;
-
-	// as before, find them, set them
-	uint32_t queueFamilyCount = 0;
-	vkGetPhysicalDeviceQueueFamilyProperties(pd, &queueFamilyCount, nullptr);
-
-	std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
-	vkGetPhysicalDeviceQueueFamilyProperties(pd, &queueFamilyCount, queueFamilies.data());
-
-	// find suitable family that supports compute.
-	unsigned int i = 0;
-	for (const auto& queueFamily : queueFamilies)
-	{
-
-		// check for compute support 
-		if (queueFamily.queueCount > 0 && queueFamily.queueFlags & VK_QUEUE_COMPUTE_BIT)
-		{
-			index = i;
-			break;
-		}
-		i++;
-	}
-
-	return index;
-}
-
 void Application::buildComputeCommandBuffer()
 {
 	// create command buffer
@@ -2067,13 +2052,7 @@ void Application::createComputeUBO()
 void Application::prepareCompute()
 {
 	createComputeUBO();
-
-	// get compute capable device queue
-	int queueIndex = findComputeQueueFamily(physicalDevice);
-	// store value
-	queueFamilyIndices.compute = queueIndex;
-	vkGetDeviceQueue(device, queueIndex, 0, &compute.queue);
-
+	
 	// create compute pipeline
 	// Compute pipelines are created separate from graphics pipelines even if they use the same queue (family index)
 

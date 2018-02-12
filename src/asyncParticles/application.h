@@ -60,9 +60,11 @@ static std::vector<char> readFile(const std::string& filename)
 struct QueueFamilyIndices {
 	int graphicsFamily = -1;
 	int presentFamily = -1;
+	int computeFamily = -1;
 
+	// check if families are complete. gfx compute present
 	bool isComplete() {
-		return graphicsFamily >= 0 && presentFamily >= 0;
+		return graphicsFamily >= 0 && presentFamily >= 0 && computeFamily >= 0;
 	}
 };
 
