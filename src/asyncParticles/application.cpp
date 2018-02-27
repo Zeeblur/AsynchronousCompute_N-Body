@@ -115,7 +115,7 @@ void Application::cleanupSwapChain()
 		vkDestroyFramebuffer(device, swapChainFramebuffers[i], nullptr);
 	}
 
-	vkFreeCommandBuffers(device, commandPool, static_cast<uint32_t>(commandBuffers.size()), commandBuffers.data());
+	vkFreeCommandBuffers(device, gfxCommandPool, static_cast<uint32_t>(commandBuffers.size()), commandBuffers.data());
 
 	vkDestroyPipeline(device, graphicsPipeline, nullptr);
 	vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
@@ -165,7 +165,7 @@ void Application::cleanup()
 	vkDestroySemaphore(device, renderFinishedSemaphore, nullptr);
 	vkDestroySemaphore(device, imageAvailableSemaphore, nullptr);
 
-	vkDestroyCommandPool(device, commandPool, nullptr);
+	vkDestroyCommandPool(device, gfxCommandPool, nullptr);
 
 	vkDestroyDevice(device, nullptr);
 	DestroyDebugReportCallbackEXT(instance, callback, nullptr);
@@ -885,12 +885,25 @@ void Application::createCommandPool()
 	VkCommandPoolCreateInfo poolInfo = {};
 	poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
 	poolInfo.queueFamilyIndex = queueFamilyIndices.graphicsFamily;
-	poolInfo.flags = 0; // Optional - for recreating them
+	poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 
 	// create the pool
-	if (vkCreateCommandPool(device, &poolInfo, nullptr, &commandPool) != VK_SUCCESS)
-		throw std::runtime_error("failed to create command pool!");
-	
+	if (vkCreateCommandPool(device, &poolInfo, nullptr, &gfxCommandPool) != VK_SUCCESS)
+		throw std::runtime_error("failed to create gfx command pool!");
+
+	// create compute command pool
+	if (queueFamilyIndices.graphicsFamily == queueFamilyIndices.computeFamily)
+	{
+		compute.commandPool = gfxCommandPool;
+	}
+	else 	// Separate command pool as queue family for compute may be different than graphics
+	{
+		poolInfo.queueFamilyIndex = queueFamilyIndices.computeFamily;
+
+		if (vkCreateCommandPool(device, &poolInfo, nullptr, &compute.commandPool) != VK_SUCCESS)
+			throw std::runtime_error("Failed creating compute cmd pool");
+
+	}	
 }
 
 // create buffer in memory - allocate and map
@@ -1021,7 +1034,6 @@ void Application::transitionImageLayout(VkImage image, VkFormat format, VkImageL
 	endSingleTimeCommands(commandBuffer);
 }
 
-
 void Application::copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height)
 {
 	VkCommandBuffer commandBuffer = beginSingleTimeCommands();
@@ -1135,7 +1147,7 @@ void Application::createDescriptorPool()
 	poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
 	poolInfo.poolSizeCount = poolSize.size();
 	poolInfo.pPoolSizes = poolSize.data();
-	poolInfo.maxSets = 2; // max sets to allocate
+	poolInfo.maxSets = 5; // max sets to allocate
 
 	// create it
 	if (vkCreateDescriptorPool(device, &poolInfo, nullptr, &descriptorPool) != VK_SUCCESS)
@@ -1201,7 +1213,7 @@ void Application::createCommandBuffers()
 	// allocate the buffers
 	VkCommandBufferAllocateInfo allocInfo = {};
 	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-	allocInfo.commandPool = commandPool;
+	allocInfo.commandPool = gfxCommandPool;
 
 	// primary can be submitted to a queue for execution but cannot be called from other command buffers
 	// secondary cannot be submitted but can be called from primary buffers
@@ -1374,53 +1386,30 @@ void Application::draw()
 //	vkQueueWaitIdle(presentQueue);
 }
 
-// copy compute results
-void Application::copyComputeResults()
-{
-
-	VkSubmitInfo submitInfo{};
-	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-	submitInfo.commandBufferCount = 1;
-	submitInfo.pCommandBuffers = &transferCmdBuffer;
-	// Submit to queue (maybe graphics?)
-	VkFence fence = VK_NULL_HANDLE;
-	if (vkQueueSubmit(compute.queue, 1, &submitInfo, fence) != VK_SUCCESS)
-			throw std::runtime_error("failed to submit gfx queue");
-
-}
-
 void Application::drawFrame()
 {
 
-	// Check for compute operation results
-	if (compute.fence && VK_SUCCESS == vkGetFenceStatus(device, compute.fence))
-	{
-		copyComputeResults();
-		vkDestroyFence(device, compute.fence, nullptr);
-		compute.fence = nullptr;// new fence;
-		VkFence newFence = VK_NULL_HANDLE;
-		compute.fence = newFence;
-	}
+	////if (!compute.fence)
+	//{
+	//	// create fence
+	//	// Fence for compute CB sync
+	//	VkFenceCreateInfo fenceCreateInfo{};
+	//	fenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+	//	//fenceCreateInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+	//	if (vkCreateFence(device, &fenceCreateInfo, nullptr, &compute.fence) != VK_SUCCESS)
+	//		throw std::runtime_error("Failed creating compute fence");
+	//	
 
-	if (!compute.fence)
-	{
-		// create fence
-		// Fence for compute CB sync
-		VkFenceCreateInfo fenceCreateInfo{};
-		fenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-		//fenceCreateInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
-		if (vkCreateFence(device, &fenceCreateInfo, nullptr, &compute.fence) != VK_SUCCESS)
-			throw std::runtime_error("Failed creating compute fence");
-		
 
-		VkSubmitInfo computeSubmitInfo{};
-		computeSubmitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-		computeSubmitInfo.pCommandBuffers = &compute.commandBuffer;
-		computeSubmitInfo.commandBufferCount = 1;
+	// Update - (submit compute q)
+	VkSubmitInfo computeSubmitInfo{};
+	computeSubmitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	computeSubmitInfo.pCommandBuffers = &compute.commandBuffer[bufferIndex];
+	computeSubmitInfo.commandBufferCount = 1;
 
-		if(vkQueueSubmit(compute.queue, 1, &computeSubmitInfo, compute.fence) != VK_SUCCESS)
-			throw std::runtime_error("failed to submit compute queue");
-	}
+	if(vkQueueSubmit(compute.queue, 1, &computeSubmitInfo, compute.fence) != VK_SUCCESS)
+		throw std::runtime_error("failed to submit compute queue");
+	
 
 
 	// get image from swapchain, execute command buffer with that image in the framebuffer, return the image to the swap chain for presentation
@@ -1560,7 +1549,7 @@ VkCommandBuffer Application::beginSingleTimeCommands() {
 	VkCommandBufferAllocateInfo allocInfo = {};
 	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
 	allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-	allocInfo.commandPool = commandPool;
+	allocInfo.commandPool = gfxCommandPool;
 	allocInfo.commandBufferCount = 1;
 
 	VkCommandBuffer commandBuffer;
@@ -1586,7 +1575,7 @@ void Application::endSingleTimeCommands(VkCommandBuffer commandBuffer) {
 	vkQueueSubmit(graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
 	vkQueueWaitIdle(graphicsQueue);
 
-	vkFreeCommandBuffers(device, commandPool, 1, &commandBuffer);
+	vkFreeCommandBuffers(device, gfxCommandPool, 1, &commandBuffer);
 }
 
 void Application::updateUniformBuffer()
@@ -1944,97 +1933,35 @@ void Application::setVertexData(const std::vector<Vertex> vert, const std::vecto
 
 }
 
-void Application::buildComputeCommandBuffer()
+void Application::buildComputeCommandBuffer(int frame)
 {
-	// create command buffer
+	// create command buffer For current frame....
 	// Compute: Begin, bind pipeline, bind desc sets, dispatch calls, end.
 
 	// begin
 	VkCommandBufferBeginInfo cmdBufInfo{};
 	cmdBufInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 
-	if (vkBeginCommandBuffer(compute.commandBuffer, &cmdBufInfo) != VK_SUCCESS)
+	if (vkBeginCommandBuffer(compute.commandBuffer[frame], &cmdBufInfo) != VK_SUCCESS)
 		throw std::runtime_error("Compute command buffer failed to start");
 
 	// bind pipeline & desc sets
-	vkCmdBindPipeline(compute.commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, compute.pipeline);
-	vkCmdBindDescriptorSets(compute.commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, compute.pipelineLayout, 0, 1, &compute.descriptorSet, 0, 0);
+	vkCmdBindPipeline(compute.commandBuffer[frame], VK_PIPELINE_BIND_POINT_COMPUTE, compute.pipeline);
 
-	// dispatch shader
-	vkCmdDispatch(compute.commandBuffer, PARTICLE_COUNT, 1, 1);
+	std::vector<VkDescriptorSet> descriptorSets;
+	descriptorSets.push_back(particleBuffer[1 - frame]->getDescriptorSet());
+	descriptorSets.push_back(particleBuffer[frame]->getDescriptorSet());
+	descriptorSets.push_back(updateBuffer->getDescriptorSet());
+	vkCmdBindDescriptorSets(compute.commandBuffer[frame], VK_PIPELINE_BIND_POINT_COMPUTE, computePipeline->getPipelineLayout(), 0, descriptorSets.size(), descriptorSets.data(), 0, nullptr);
+	int groupSize = 256;
+	vkCmdResetQueryPool(compute.commandBuffer[frame], computeQueryPool, 0, 2);
+	vkCmdWriteTimestamp(compute.commandBuffer[frame], VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, computeQueryPool, 0);
+	vkCmdDispatch(compute.commandBuffer[frame], particleCount / groupSize + (particleCount % groupSize != 0), 1, 1);
+	vkCmdWriteTimestamp(compute.commandBuffer[frame], VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, computeQueryPool, 1);
+
 
 	// end cmd writing
-	vkEndCommandBuffer(compute.commandBuffer);
-
-	// Set up memory barriers
-	// need for compute and draw
-
-	VkBufferMemoryBarrier computeBarrier, drawBarrier;
-	computeBarrier.srcQueueFamilyIndex = 0;
-	computeBarrier.dstQueueFamilyIndex = 0;
-	computeBarrier.offset = 0;
-	computeBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-	computeBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT;
-	computeBarrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-	computeBarrier.buffer = buffers[INSTANCE]->buffer; // comput storgae buffer
-	computeBarrier.size = buffers[INSTANCE]->size * sizeof(particle); // desc range
-
-	computeBarrier.pNext = nullptr;
-	drawBarrier.pNext = nullptr;  
-
-	// draw barrier
-	drawBarrier.srcQueueFamilyIndex = 0;
-	drawBarrier.dstQueueFamilyIndex = 0;
-	drawBarrier.offset = 0;
-	drawBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-	drawBarrier.srcAccessMask = VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT;
-	drawBarrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-	drawBarrier.buffer = buffers[INSTANCE]->drawStorageBuffer;
-	drawBarrier.size = buffers[INSTANCE]->size * sizeof(particle);
-
-
-	// begin writing to transfer cmd buffer
-	// set up pipeline barrier, copy buffer, change barriers, end.
-	if (vkBeginCommandBuffer(transferCmdBuffer, &cmdBufInfo) != VK_SUCCESS)
-		throw std::runtime_error("transfer command buffer failed to start");
-
-
-	VkBufferMemoryBarrier memBarriers[] = { computeBarrier, drawBarrier };
-
-	// barrier to transfer
-	vkCmdPipelineBarrier(
-		transferCmdBuffer,
-		VK_PIPELINE_STAGE_TRANSFER_BIT,
-		VK_PIPELINE_STAGE_TRANSFER_BIT,
-		VK_FLAGS_NONE,
-		0, nullptr,
-		2, memBarriers,
-		0, nullptr);
-
-	// Copy buffers
-	VkBufferCopy copyRegion = {};
-	copyRegion.size = buffers[INSTANCE]->size * sizeof(particle);
-	vkCmdCopyBuffer(transferCmdBuffer, buffers[INSTANCE]->buffer, buffers[INSTANCE]->drawStorageBuffer, 1, &copyRegion);
-
-
-	// update barrier
-	computeBarrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-	computeBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
-	drawBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-	drawBarrier.dstAccessMask = VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT;
-
-	// barrier to transfer
-	vkCmdPipelineBarrier(
-		transferCmdBuffer,
-		VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-		VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-		VK_FLAGS_NONE,
-		0, nullptr,
-		2, memBarriers,
-		0, nullptr);
-
-	// end tra writing
-	vkEndCommandBuffer(transferCmdBuffer);
+	vkEndCommandBuffer(compute.commandBuffer[frame]);
 }
 
 void Application::createComputeUBO()
@@ -2047,6 +1974,16 @@ void Application::createComputeUBO()
 	VkDeviceSize bufferSize = sizeof(ComputeConfig::computeUBO);
 	createBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
 		compute.uniformBuffer, compute.uboMem);  // buffer pointer and memory
+}
+
+
+void Application::waitOnFence(VkFence& fence)
+{
+	// spinlock on fence
+	while (vkWaitForFences(device, 1, &fence, VK_TRUE, 1000) != VK_SUCCESS);
+
+	// reset fence
+	vkResetFences(device, 1, &fence);
 }
 
 void Application::prepareCompute()
@@ -2170,14 +2107,6 @@ void Application::prepareCompute()
 	if(vkCreateComputePipelines(device, pipeCache, 1, &computePipelineCreateInfo, nullptr, &compute.pipeline) != VK_SUCCESS)
 		throw std::runtime_error("failed creating compute pipeline");
 
-	// Separate command pool as queue family for compute may be different than graphics
-	VkCommandPoolCreateInfo cmdPoolInfo = {};
-	cmdPoolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-	cmdPoolInfo.queueFamilyIndex = queueFamilyIndices.compute;
-	cmdPoolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-	if(vkCreateCommandPool(device, &cmdPoolInfo, nullptr, &compute.commandPool) != VK_SUCCESS)
-		throw std::runtime_error("Failed creating compute cmd pool");
-
 	// Create a command buffer for compute operations
 	VkCommandBufferAllocateInfo cmdBufAllocateInfo{};
 	cmdBufAllocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -2186,9 +2115,6 @@ void Application::prepareCompute()
 	cmdBufAllocateInfo.commandBufferCount = 1;
 	if(vkAllocateCommandBuffers(device, &cmdBufAllocateInfo, &compute.commandBuffer) != VK_SUCCESS)
 		throw std::runtime_error("Failed allocating buffer for compute commands");
-	// allocate transfer command buffer
-	if (vkAllocateCommandBuffers(device, &cmdBufAllocateInfo, &transferCmdBuffer) != VK_SUCCESS)
-		throw std::runtime_error("Failed allocating buffer for transfer commands");
 
 	// Fence for compute CB sync
 	VkFenceCreateInfo fenceCreateInfo{};

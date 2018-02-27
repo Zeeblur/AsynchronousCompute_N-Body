@@ -164,7 +164,7 @@ private:
 	VkDescriptorSetLayout descriptorSetLayout;
 	VkPipelineLayout pipelineLayout;
 	VkPipeline graphicsPipeline;
-	VkCommandPool commandPool;
+	VkCommandPool gfxCommandPool;
 	VkSemaphore imageAvailableSemaphore;
 	VkSemaphore renderFinishedSemaphore;
 	VkBuffer vertexBuffer;

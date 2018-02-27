@@ -115,7 +115,7 @@ void Application::cleanupSwapChain()
 		vkDestroyFramebuffer(device, swapChainFramebuffers[i], nullptr);
 	}
 
-	vkFreeCommandBuffers(device, commandPool, static_cast<uint32_t>(commandBuffers.size()), commandBuffers.data());
+	vkFreeCommandBuffers(device, gfxCommandPool, static_cast<uint32_t>(commandBuffers.size()), commandBuffers.data());
 
 	vkDestroyPipeline(device, graphicsPipeline, nullptr);
 	vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
@@ -165,7 +165,7 @@ void Application::cleanup()
 	vkDestroySemaphore(device, renderFinishedSemaphore, nullptr);
 	vkDestroySemaphore(device, imageAvailableSemaphore, nullptr);
 
-	vkDestroyCommandPool(device, commandPool, nullptr);
+	vkDestroyCommandPool(device, gfxCommandPool, nullptr);
 
 	vkDestroyDevice(device, nullptr);
 	DestroyDebugReportCallbackEXT(instance, callback, nullptr);
@@ -879,7 +879,7 @@ void Application::createCommandPool()
 	poolInfo.flags = 0; // Optional - for recreating them
 
 	// create the pool
-	if (vkCreateCommandPool(device, &poolInfo, nullptr, &commandPool) != VK_SUCCESS)
+	if (vkCreateCommandPool(device, &poolInfo, nullptr, &gfxCommandPool) != VK_SUCCESS)
 		throw std::runtime_error("failed to create command pool!");
 	
 }
@@ -1192,7 +1192,7 @@ void Application::createCommandBuffers()
 	// allocate the buffers
 	VkCommandBufferAllocateInfo allocInfo = {};
 	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-	allocInfo.commandPool = commandPool;
+	allocInfo.commandPool = gfxCommandPool;
 
 	// primary can be submitted to a queue for execution but cannot be called from other command buffers
 	// secondary cannot be submitted but can be called from primary buffers
@@ -1498,7 +1498,7 @@ VkCommandBuffer Application::beginSingleTimeCommands() {
 	VkCommandBufferAllocateInfo allocInfo = {};
 	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
 	allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-	allocInfo.commandPool = commandPool;
+	allocInfo.commandPool = gfxCommandPool;
 	allocInfo.commandBufferCount = 1;
 
 	VkCommandBuffer commandBuffer;
@@ -1524,7 +1524,7 @@ void Application::endSingleTimeCommands(VkCommandBuffer commandBuffer) {
 	vkQueueSubmit(graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
 	vkQueueWaitIdle(graphicsQueue);
 
-	vkFreeCommandBuffers(device, commandPool, 1, &commandBuffer);
+	vkFreeCommandBuffers(device, gfxCommandPool, 1, &commandBuffer);
 }
 
 void Application::updateUniformBuffer()

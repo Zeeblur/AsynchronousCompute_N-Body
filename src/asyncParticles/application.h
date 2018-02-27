@@ -165,7 +165,7 @@ private:
 	VkDescriptorSetLayout descriptorSetLayout;
 	VkPipelineLayout pipelineLayout;
 	VkPipeline graphicsPipeline;
-	VkCommandPool commandPool;
+	VkCommandPool gfxCommandPool;
 	VkSemaphore imageAvailableSemaphore;
 	VkSemaphore renderFinishedSemaphore;
 
@@ -181,7 +181,7 @@ private:
 		VkBuffer uniformBuffer;		    // Uniform buffer object containing particle system parameters
 		VkQueue queue;								// Separate queue for compute commands (queue family may differ from the one used for graphics)
 		VkCommandPool commandPool;					// Use a separate command pool (queue family may differ from the one used for graphics)
-		VkCommandBuffer commandBuffer;				// Command buffer storing the dispatch commands and barriers
+		VkCommandBuffer commandBuffer[2];			// 2 Command buffer storing the dispatch commands and barriers
 		VkFence fence;								// Synchronization fence to avoid rewriting compute CB if still in use
 		VkDescriptorSetLayout descriptorSetLayout;	// Compute shader binding layout
 		VkDescriptorSet descriptorSet;				// Compute shader bindings
@@ -205,7 +205,6 @@ private:
 
 	void createComputeUBO();
 	void updateCompute();
-	void copyComputeResults(); // transfer queue copy commands
 
 	VkBuffer uniformBuffer;
 	VkDeviceMemory uniformBufferMemory;
@@ -240,6 +239,8 @@ private:
 	void cleanupSwapChain();
 	 
 	void recreateSwapChain();
+
+	void waitOnFence(VkFence& fence);
 
 	static void onWindowResized(GLFWwindow* window, int width, int height)
 	{
@@ -291,11 +292,9 @@ private:
 	void createDescriptorSet();
 
 	void createCommandBuffers();
-	void buildComputeCommandBuffer();
+	void buildComputeCommandBuffer(int frame);
 	void createSemaphores();
 
-	// transfer command buffers
-	VkCommandBuffer transferCmdBuffer;
 	void drawFrame();
 	void updateUniformBuffer();
 
