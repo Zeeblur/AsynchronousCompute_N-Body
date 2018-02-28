@@ -62,7 +62,8 @@ void Application::createConfig(int pCount)
 	createUniformBuffer();
 	createDescriptorPool();
 	createDescriptorSet();
-	createCommandBuffers(); 
+	createCommandBuffers(0); 
+	createCommandBuffers(1);
 	createSemaphores();
 
 	prepareCompute();
@@ -79,9 +80,11 @@ void Application::mainLoop()
 		 
 
 		 
-		updateUniformBuffer();   // update
+		//updateUniformBuffer();   // update
 		drawFrame();			 // render
-		updateCompute();		 // update 
+		//updateCompute();		 // update 
+
+		waitOnFence(compute.fence);
 
 		frameCounter++;
 		auto endTime = std::chrono::high_resolution_clock::now();
@@ -115,7 +118,7 @@ void Application::cleanupSwapChain()
 		vkDestroyFramebuffer(device, swapChainFramebuffers[i], nullptr);
 	}
 
-	vkFreeCommandBuffers(device, gfxCommandPool, static_cast<uint32_t>(commandBuffers.size()), commandBuffers.data());
+	vkFreeCommandBuffers(device, gfxCommandPool, 2, commandBuffers);
 
 	vkDestroyPipeline(device, graphicsPipeline, nullptr);
 	vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
@@ -148,16 +151,25 @@ void Application::cleanup()
 	// destroy buffers
 	for (auto &b : buffers)
 	{
-		vkDestroyBuffer(device, b->buffer, nullptr);
-		vkFreeMemory(device, b->memory, nullptr);
+		for (int i = 0; i < b->buffers.size(); ++i)
+		{
+			vkDestroyBuffer(device, b->buffers[i], nullptr);
+			vkFreeMemory(device, b->memory[i], nullptr);
+		}
 	}
 
 	// compute clean up
 	vkDestroyFence(device, compute.fence, nullptr);
+	vkDestroyFence(device, graphicsFence, nullptr);
 	vkDestroyPipelineLayout(device, compute.pipelineLayout, nullptr);
 	vkDestroyDescriptorSetLayout(device, compute.descriptorSetLayout, nullptr);
 	vkDestroyPipeline(device, compute.pipeline, nullptr);
-	vkFreeCommandBuffers(device, compute.commandPool, static_cast<uint32_t>(1), &compute.commandBuffer);
+
+	for (auto &b : compute.commandBuffer)
+	{
+		vkFreeCommandBuffers(device, compute.commandPool, static_cast<uint32_t>(1), &b);
+	}
+
 	vkDestroyCommandPool(device, compute.commandPool, nullptr);
 	vkDestroyBuffer(device, compute.uniformBuffer, nullptr);
 	vkFreeMemory(device, compute.uboMem, nullptr);
@@ -189,7 +201,8 @@ void Application::recreateSwapChain()
 	createGraphicsPipeline();
 	createDepthResources();
 	createFramebuffers();
-	createCommandBuffers();
+	createCommandBuffers(0);
+	createCommandBuffers(1);
 }
 
 // create a struct with driver specific details
@@ -388,14 +401,14 @@ void Application::createSwapChain()
 
 	// set the amount of images in the swap chain (queue length)
 	// try to get the min needed to render properly and have 1 more than that for triple buffering
-	uint32_t imageCount = swapChainSupport.capabilities.minImageCount + 1;
+	uint32_t imageCount = 2;// swapChainSupport.capabilities.minImageCount + 1;
 
 	// if it's not zero and higher than the max... change it to max
 	if (swapChainSupport.capabilities.maxImageCount > 0 && imageCount > swapChainSupport.capabilities.maxImageCount) {
 		imageCount = swapChainSupport.capabilities.maxImageCount;
 	}
 
-
+	imageCount = 2;
 	// create info for swapchain
 	VkSwapchainCreateInfoKHR createInfo = {};
 	createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
@@ -904,6 +917,22 @@ void Application::createCommandPool()
 			throw std::runtime_error("Failed creating compute cmd pool");
 
 	}	
+
+	// allocate the buffers
+	VkCommandBufferAllocateInfo allocInfo = {};
+	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+	allocInfo.commandPool = gfxCommandPool;
+
+	// primary can be submitted to a queue for execution but cannot be called from other command buffers
+	// secondary cannot be submitted but can be called from primary buffers
+	allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+	allocInfo.commandBufferCount = 2;
+
+	if (vkAllocateCommandBuffers(device, &allocInfo, commandBuffers) != VK_SUCCESS)
+	{
+		throw std::runtime_error("failed to allocate command buffers!");
+	}
+
 }
 
 // create buffer in memory - allocate and map
@@ -1205,28 +1234,10 @@ void Application::createDescriptorSet()
 }
 
 // record the commands! for graphics 
-void Application::createCommandBuffers()
-{
-	// resize allocation for frame buffers
-	commandBuffers.resize(swapChainFramebuffers.size());
-
-	// allocate the buffers
-	VkCommandBufferAllocateInfo allocInfo = {};
-	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-	allocInfo.commandPool = gfxCommandPool;
-
-	// primary can be submitted to a queue for execution but cannot be called from other command buffers
-	// secondary cannot be submitted but can be called from primary buffers
-	allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-	allocInfo.commandBufferCount = (uint32_t)commandBuffers.size();
-
-	if (vkAllocateCommandBuffers(device, &allocInfo, commandBuffers.data()) != VK_SUCCESS)
-	{
-		throw std::runtime_error("failed to allocate command buffers!");
-	}
-	 
+void Application::createCommandBuffers(int frame)
+{	 
 	// record into command buffers
-	for (size_t i = 0; i < commandBuffers.size(); i++)
+	//for (size_t i = 0; i < commandBuffers.size(); i++)
 	{
 		// begin recording command buffer
 		VkCommandBufferBeginInfo beginInfo = {};
@@ -1237,14 +1248,14 @@ void Application::createCommandBuffers()
 		beginInfo.pInheritanceInfo = nullptr; // Optional - only relevant for secondary cmd buffers
 
 		// this call resets command buffer as not possible to ammend
-		vkBeginCommandBuffer(commandBuffers[i], &beginInfo);
+		vkBeginCommandBuffer(commandBuffers[frame], &beginInfo);
 
 		// Start the render pass
 		VkRenderPassBeginInfo renderPassInfo = {};
 		renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
 		// render pass and it's attachments to bind (in this case a colour attachment from the frambuffer)
 		renderPassInfo.renderPass = renderPass;
-		renderPassInfo.framebuffer = swapChainFramebuffers[i];
+		renderPassInfo.framebuffer = swapChainFramebuffers[frame];
 
 		// size of render area
 		renderPassInfo.renderArea.offset = { 0, 0 };
@@ -1259,33 +1270,33 @@ void Application::createCommandBuffers()
 		renderPassInfo.pClearValues = clearValues.data();
 
 		// begin pass - command buffer to record to, the render pass details, how the commands are provided (from 1st/2ndary)
-		vkCmdBeginRenderPass(commandBuffers[i], &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+		vkCmdBeginRenderPass(commandBuffers[frame], &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
 		// BIND THE PIPELINE
-		vkCmdBindPipeline(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
+		vkCmdBindPipeline(commandBuffers[frame], VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
 	
 		// bind the vbo
-		VkBuffer vertexBuffers[] = { buffers[VERTEX]->buffer };
+		VkBuffer vertexBuffers[] = { buffers[VERTEX]->buffers[0]};
 		VkDeviceSize offsets[] = { 0 };
-		vkCmdBindVertexBuffers(commandBuffers[i], 0, 1, vertexBuffers, offsets); // vbo
+		vkCmdBindVertexBuffers(commandBuffers[frame], 0, 1, vertexBuffers, offsets); // vbo
 
-		VkBuffer instanceBuffers[] = { buffers[INSTANCE]->drawStorageBuffer };
+		VkBuffer instanceBuffers[] = { buffers[INSTANCE]->buffers[frame] };
 
-		vkCmdBindVertexBuffers(commandBuffers[i], 1, 1, instanceBuffers, offsets); // instance
+		vkCmdBindVertexBuffers(commandBuffers[frame], 1, 1, instanceBuffers, offsets); // instance
 		// bind index & uniforms
-		vkCmdBindIndexBuffer(commandBuffers[i], buffers[INDEX]->buffer, 0, VK_INDEX_TYPE_UINT16);
-		vkCmdBindDescriptorSets(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSet, 0, nullptr);
+		vkCmdBindIndexBuffer(commandBuffers[frame], buffers[INDEX]->buffers[0], 0, VK_INDEX_TYPE_UINT16);
+		vkCmdBindDescriptorSets(commandBuffers[frame], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSet, 0, nullptr);
 
 		// DRAW A TRIANGLEEEEE!!!?"!?!!?!?!?!?!?!
 		// vertex count, instance count, first vertex/ first instance. - used for offsets
-		vkCmdDrawIndexed(commandBuffers[i], static_cast<uint32_t>(buffers[INDEX]->size), static_cast<uint32_t>(buffers[INSTANCE]->size), 0, 0, 0);
+		vkCmdDrawIndexed(commandBuffers[frame], static_cast<uint32_t>(buffers[INDEX]->size), static_cast<uint32_t>(buffers[INSTANCE]->size), 0, 0, 0);
 		//vkCmdDraw(commandBuffers[i], static_cast<uint32_t>(vertices.size()), 1, 0, 0);
 	 
 		// end the pass
-		vkCmdEndRenderPass(commandBuffers[i]);
+		vkCmdEndRenderPass(commandBuffers[frame]);
 
 		// check if failed recording
-		if (vkEndCommandBuffer(commandBuffers[i]) != VK_SUCCESS)
+		if (vkEndCommandBuffer(commandBuffers[frame]) != VK_SUCCESS)
 			throw std::runtime_error("failed to record command buffer!");
 		
 	}
@@ -1340,15 +1351,15 @@ void Application::draw()
 
 	// which command buffers to submit for exe - the one that binds the swap chain image we aquired as a colour attachment
 	submitInfo.commandBufferCount = 1;
-	submitInfo.pCommandBuffers = &commandBuffers[imageIndex];
+	submitInfo.pCommandBuffers = &commandBuffers[bufferIndex];
 
 	// which semaphores to signal once the command buffers have finished execution.
 	VkSemaphore signalSemaphores[] = { renderFinishedSemaphore };
 	submitInfo.signalSemaphoreCount = 1;
 	submitInfo.pSignalSemaphores = signalSemaphores;
 
-	// submit to queue with signal info. // last param is a fence but we're using semaphores
-	if (vkQueueSubmit(graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE) != VK_SUCCESS)
+	// submit to queue with signal info. // last param is a fence
+	if (vkQueueSubmit(graphicsQueue, 1, &submitInfo, graphicsFence) != VK_SUCCESS)
 		throw std::runtime_error("failed to submit draw command buffer!");
 
 
@@ -1382,24 +1393,20 @@ void Application::draw()
 		throw std::runtime_error("failed to present swap chain image!");
 	}
 
-	// wait until presentation is finished before drawing the next frame
-//	vkQueueWaitIdle(presentQueue);
 }
 
 void Application::drawFrame()
 {
 
-	////if (!compute.fence)
-	//{
-	//	// create fence
-	//	// Fence for compute CB sync
-	//	VkFenceCreateInfo fenceCreateInfo{};
-	//	fenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-	//	//fenceCreateInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
-	//	if (vkCreateFence(device, &fenceCreateInfo, nullptr, &compute.fence) != VK_SUCCESS)
-	//		throw std::runtime_error("Failed creating compute fence");
-	//	
+	// get image from swapchain, execute command buffer with that image in the framebuffer, return the image to the swap chain for presentation
+	draw();
 
+	// Wait for finished rendering.
+	//if (!async)
+	//	waitOnFence(graphicsFence);
+
+	updateUniformBuffer();
+	updateCompute();
 
 	// Update - (submit compute q)
 	VkSubmitInfo computeSubmitInfo{};
@@ -1412,8 +1419,10 @@ void Application::drawFrame()
 	
 
 
-	// get image from swapchain, execute command buffer with that image in the framebuffer, return the image to the swap chain for presentation
-	draw();
+	//if async
+	waitOnFence(graphicsFence);
+
+	bufferIndex = 1 - bufferIndex;
 
 	// Submit compute commands
 	//vkWaitForFences(device, 1, &compute.fence, VK_TRUE, UINT64_MAX);
@@ -1679,12 +1688,14 @@ bool Application::isDeviceSuitable(VkPhysicalDevice device)
 	vkGetPhysicalDeviceFeatures(device, &deviceFeatures);
 
 	// Don't choose 1080
+#ifdef AMD
 	char *output = NULL;
 	output = strstr(deviceProperties.deviceName, "GTX");
 	if (output) {
 		printf("1080 Found");
 		return false;
 	}
+#endif // AMD
 
 	// is this a discrete gpu and does it have geom capabilities 
 	bool physical = deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU &&
@@ -1948,16 +1959,15 @@ void Application::buildComputeCommandBuffer(int frame)
 	// bind pipeline & desc sets
 	vkCmdBindPipeline(compute.commandBuffer[frame], VK_PIPELINE_BIND_POINT_COMPUTE, compute.pipeline);
 
-	std::vector<VkDescriptorSet> descriptorSets;
-	descriptorSets.push_back(particleBuffer[1 - frame]->getDescriptorSet());
-	descriptorSets.push_back(particleBuffer[frame]->getDescriptorSet());
-	descriptorSets.push_back(updateBuffer->getDescriptorSet());
-	vkCmdBindDescriptorSets(compute.commandBuffer[frame], VK_PIPELINE_BIND_POINT_COMPUTE, computePipeline->getPipelineLayout(), 0, descriptorSets.size(), descriptorSets.data(), 0, nullptr);
-	int groupSize = 256;
-	vkCmdResetQueryPool(compute.commandBuffer[frame], computeQueryPool, 0, 2);
-	vkCmdWriteTimestamp(compute.commandBuffer[frame], VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, computeQueryPool, 0);
-	vkCmdDispatch(compute.commandBuffer[frame], particleCount / groupSize + (particleCount % groupSize != 0), 1, 1);
-	vkCmdWriteTimestamp(compute.commandBuffer[frame], VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, computeQueryPool, 1);
+	//std::vector<VkDescriptorSet> descriptorSets;
+	//descriptorSets.push_back(buffers[INSTANCE]->buffers[1 - frame]->getDescriptorSet());
+	//descriptorSets.push_back(particleBuffer[frame]->getDescriptorSet());
+	//descriptorSets.push_back(updateBuffer->getDescriptorSet());
+	vkCmdBindDescriptorSets(compute.commandBuffer[frame], VK_PIPELINE_BIND_POINT_COMPUTE, compute.pipelineLayout, 0, 1, &compute.descriptorSet, 0, nullptr);
+	//vkCmdResetQueryPool(compute.commandBuffer[frame], computeQueryPool, 0, 2);
+	//vkCmdWriteTimestamp(compute.commandBuffer[frame], VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, computeQueryPool, 0);
+	vkCmdDispatch(compute.commandBuffer[frame], PARTICLE_COUNT, 1, 1);
+	//vkCmdWriteTimestamp(compute.commandBuffer[frame], VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, computeQueryPool, 1);
 
 
 	// end cmd writing
@@ -1995,7 +2005,7 @@ void Application::prepareCompute()
 
 	VkDescriptorSetLayoutBinding positionBinding{};
 	positionBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-	positionBinding.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+	positionBinding.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_VERTEX_BIT;
 	positionBinding.binding = 0;
 	positionBinding.descriptorCount = 1;
 
@@ -2047,7 +2057,7 @@ void Application::prepareCompute()
 	//compute.storageBuffer = buffers[INSTANCE];
 
 	VkDescriptorBufferInfo bufferInfo = {};
-	bufferInfo.buffer = buffers[INSTANCE]->buffer;
+	bufferInfo.buffer = buffers[INSTANCE]->buffers[0];
 	bufferInfo.offset = 0;
 	bufferInfo.range = sizeof(particle) * buffers[INSTANCE]->size;  //  BUFFER SIZE FOR COMPUTE!
 
@@ -2112,22 +2122,25 @@ void Application::prepareCompute()
 	cmdBufAllocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
 	cmdBufAllocateInfo.commandPool = compute.commandPool;
 	cmdBufAllocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-	cmdBufAllocateInfo.commandBufferCount = 1;
-	if(vkAllocateCommandBuffers(device, &cmdBufAllocateInfo, &compute.commandBuffer) != VK_SUCCESS)
+	cmdBufAllocateInfo.commandBufferCount = 2;
+	if(vkAllocateCommandBuffers(device, &cmdBufAllocateInfo, compute.commandBuffer) != VK_SUCCESS)
 		throw std::runtime_error("Failed allocating buffer for compute commands");
-
 	// Fence for compute CB sync
 	VkFenceCreateInfo fenceCreateInfo{};
 	fenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-	fenceCreateInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+	fenceCreateInfo.flags = 0;
 	if(vkCreateFence(device, &fenceCreateInfo, nullptr, &compute.fence) != VK_SUCCESS)
 		throw std::runtime_error("Failed creating compute fence");
 
-	
+	// fence for gfx
+	if (vkCreateFence(device, &fenceCreateInfo, nullptr, &graphicsFence) != VK_SUCCESS)
+		throw std::runtime_error("Failed creating gfx fence");
+
 	vkDestroyShaderModule(device, computeShaderMod, nullptr);
 
 	// Build a single command buffer containing the compute dispatch commands
-	buildComputeCommandBuffer();
+	buildComputeCommandBuffer(0);
+	buildComputeCommandBuffer(1);
 
 	//vkMapMemory(device, buffers[INSTANCE]->memory, 0, buffers[INSTANCE]->size * sizeof(particle), 0, &returnParticles);
 }
