@@ -63,34 +63,39 @@ target_include_directories(vulkantest PRIVATE external/)
 
 ## PARTICLES:
 
-file(GLOB_RECURSE SOURCES2 src/particles/*.cpp src/particles/*.h external/*.h)
+file(GLOB_RECURSE SOURCES2 src/particles_compute_only/*.cpp src/particles_compute_only/*.h external/*.h)
 
-add_executable(particles ${SOURCES2})
-target_link_libraries (particles  ${EXTRA_LIBS})
+add_executable(particles_compute_only ${SOURCES2})
+target_link_libraries (particles_compute_only  ${EXTRA_LIBS})
 
-#add_custom_command(TARGET particles POST_BUILD
- # COMMAND ${CMAKE_COMMAND} -E copy_directory  "${PROJECT_SOURCE_DIR}/res" $<TARGET_FILE_DIR:particles>/res)
-  
 
 ## ASYNC:
 
-file(GLOB_RECURSE SOURCES3 src/asyncParticles/*.cpp src/asyncParticles/*.h external/*.h)
-add_executable(asyncParticles ${SOURCES3})
-target_link_libraries (asyncParticles  ${EXTRA_LIBS})
+file(GLOB_RECURSE SOURCES3 src/asyncParticles_v1_transfer/*.cpp src/asyncParticles_v1_transfer/*.h external/*.h)
+add_executable(asyncParticles_v1_transfer ${SOURCES3})
+target_link_libraries (asyncParticles_v1_transfer  ${EXTRA_LIBS})
   
-target_link_libraries(particles glfw)
-target_link_libraries(particles vulkan-1)
-target_include_directories(particles PRIVATE external/)
+ ## LINK:
+ 
+## ASYNC2:
 
-target_link_libraries(asyncParticles glfw)
-target_link_libraries(asyncParticles vulkan-1)
-target_include_directories(asyncParticles PRIVATE external/)
+file(GLOB_RECURSE SOURCES3 src/asyncParticles_v2_double/*.cpp src/asyncParticles_v2_double/*.h external/*.h)
+add_executable(asyncParticles_v2_double ${SOURCES3})
+target_link_libraries (asyncParticles_v2_double  ${EXTRA_LIBS})
+  
+target_link_libraries(particles_compute_only glfw)
+target_link_libraries(particles_compute_only vulkan-1)
+target_include_directories(particles_compute_only PRIVATE external/)
+
+target_link_libraries(asyncParticles_v1_transfer glfw)
+target_link_libraries(asyncParticles_v1_transfer vulkan-1)
+target_include_directories(asyncParticles_v1_transfer PRIVATE external/)
+
+target_link_libraries(asyncParticles_v2_double glfw)
+target_link_libraries(asyncParticles_v2_double vulkan-1)
+target_include_directories(asyncParticles_v2_double PRIVATE external/)
 
 #add_custom_command(TARGET asyncParticles POST_BUILD
  # COMMAND ${CMAKE_COMMAND} -E copy_directory   "${PROJECT_SOURCE_DIR}/res" "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/$<CONFIG>/res")
   
 add_custom_target(copy_res ALL COMMAND ${CMAKE_COMMAND} -E copy_directory "${PROJECT_SOURCE_DIR}/res" "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/$<CONFIG>/res") 
-
-add_dependencies(asyncParticles
-	copyRes
-)
