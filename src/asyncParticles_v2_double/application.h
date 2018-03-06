@@ -516,8 +516,8 @@ struct InstanceBO : BufferObject
 		Application::get()->createBuffer(bufferSize,
 			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
 			//  for getting data back
-			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
-			//VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+			//VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
 			buffers[0],
 			memory[0]); 
 
@@ -553,8 +553,8 @@ struct InstanceBO : BufferObject
 		Application::get()->createBuffer(bufferSize,
 			VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
 			//  for getting data back
-			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
-			//VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+			//VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
 			buffers[1],
 			memory[1]);
 
