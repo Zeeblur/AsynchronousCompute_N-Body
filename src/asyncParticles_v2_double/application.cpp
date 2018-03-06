@@ -1959,11 +1959,7 @@ void Application::buildComputeCommandBuffer(int frame)
 	// bind pipeline & desc sets
 	vkCmdBindPipeline(compute.commandBuffer[frame], VK_PIPELINE_BIND_POINT_COMPUTE, compute.pipeline);
 
-	//std::vector<VkDescriptorSet> descriptorSets;
-	//descriptorSets.push_back(buffers[INSTANCE]->buffers[1 - frame]->getDescriptorSet());
-	//descriptorSets.push_back(particleBuffer[frame]->getDescriptorSet());
-	//descriptorSets.push_back(updateBuffer->getDescriptorSet());
-	vkCmdBindDescriptorSets(compute.commandBuffer[frame], VK_PIPELINE_BIND_POINT_COMPUTE, compute.pipelineLayout, 0, 1, &compute.descriptorSet, 0, nullptr);
+	vkCmdBindDescriptorSets(compute.commandBuffer[frame], VK_PIPELINE_BIND_POINT_COMPUTE, compute.pipelineLayout, 0, 1, &compute.descriptorSet[frame], 0, nullptr);
 	//vkCmdResetQueryPool(compute.commandBuffer[frame], computeQueryPool, 0, 2);
 	//vkCmdWriteTimestamp(compute.commandBuffer[frame], VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, computeQueryPool, 0);
 	vkCmdDispatch(compute.commandBuffer[frame], PARTICLE_COUNT, 1, 1);
@@ -1999,7 +1995,7 @@ void Application::waitOnFence(VkFence& fence)
 void Application::prepareCompute()
 {
 	createComputeUBO();
-	
+
 	// create compute pipeline
 	// Compute pipelines are created separate from graphics pipelines even if they use the same queue (family index)
 
@@ -2016,7 +2012,7 @@ void Application::prepareCompute()
 	uniformBinding.descriptorCount = 1;
 
 	std::vector<VkDescriptorSetLayoutBinding> setLayoutBindings{};
-	
+
 	// Binding 0 : Particle position storage buffer
 	setLayoutBindings.push_back(positionBinding);
 	// Binding 1 : Uniform buffer
@@ -2030,7 +2026,7 @@ void Application::prepareCompute()
 	descriptorLayout.bindingCount = static_cast<uint32_t>(setLayoutBindings.size());
 
 	// create descriptor layout
-	if(vkCreateDescriptorSetLayout(device, &descriptorLayout, nullptr, &compute.descriptorSetLayout) != VK_SUCCESS)
+	if (vkCreateDescriptorSetLayout(device, &descriptorLayout, nullptr, &compute.descriptorSetLayout) != VK_SUCCESS)
 		throw std::runtime_error("Failed to create compute desc layout");
 
 	// create pipeline layout 
@@ -2039,7 +2035,7 @@ void Application::prepareCompute()
 	pipelineLayoutCreateInfo.setLayoutCount = 1;
 	pipelineLayoutCreateInfo.pSetLayouts = &compute.descriptorSetLayout;
 
-	if(vkCreatePipelineLayout(device, &pipelineLayoutCreateInfo, nullptr, &compute.pipelineLayout) != VK_SUCCESS)
+	if (vkCreatePipelineLayout(device, &pipelineLayoutCreateInfo, nullptr, &compute.pipelineLayout) != VK_SUCCESS)
 		throw std::runtime_error("Failed to create compute pipeline");
 
 	// allocate descriptor set info
@@ -2047,10 +2043,10 @@ void Application::prepareCompute()
 	allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
 	allocInfo.descriptorPool = descriptorPool;
 	allocInfo.pSetLayouts = &compute.descriptorSetLayout;
-	allocInfo.descriptorSetCount = 1; 
-	 
+	allocInfo.descriptorSetCount = 1;
+
 	// create allocation
-	if(vkAllocateDescriptorSets(device, &allocInfo, &compute.descriptorSet) != VK_SUCCESS)
+	if (vkAllocateDescriptorSets(device, &allocInfo, &compute.descriptorSet[0]) != VK_SUCCESS)
 		throw std::runtime_error("Failed to allocate descriptor set for compute");
 
 	// create buffers.
@@ -2070,7 +2066,7 @@ void Application::prepareCompute()
 	// Binding 0 : Particle position storage buffer
 	VkWriteDescriptorSet storageDesc{};
 	storageDesc.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-	storageDesc.dstSet = compute.descriptorSet;
+	storageDesc.dstSet = compute.descriptorSet[0];
 	storageDesc.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
 	storageDesc.dstBinding = 0;
 	storageDesc.pBufferInfo = &bufferInfo;
@@ -2078,8 +2074,8 @@ void Application::prepareCompute()
 
 	// Binding 1 : Uniform buffer
 	VkWriteDescriptorSet uniformDesc{};
-	uniformDesc.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET; 
-	uniformDesc.dstSet = compute.descriptorSet;
+	uniformDesc.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+	uniformDesc.dstSet = compute.descriptorSet[0];
 	uniformDesc.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 	uniformDesc.dstBinding = 1;
 	uniformDesc.pBufferInfo = &UBI;
@@ -2089,6 +2085,52 @@ void Application::prepareCompute()
 
 	// create sets
 	vkUpdateDescriptorSets(device, static_cast<uint32_t>(computeWriteDescriptorSets.size()), computeWriteDescriptorSets.data(), 0, NULL);
+
+	// for BUFFER number 2 (descriptionset)
+	{
+
+		// create allocation
+		if (vkAllocateDescriptorSets(device, &allocInfo, &compute.descriptorSet[1]) != VK_SUCCESS)
+			throw std::runtime_error("Failed to allocate descriptor set for compute");
+
+		// create buffers.
+		//compute.storageBuffer = buffers[INSTANCE];
+
+		VkDescriptorBufferInfo bufferInfo = {};
+		bufferInfo.buffer = buffers[INSTANCE]->buffers[1];   ////// NEED TO BIND BOTH!!!
+		bufferInfo.offset = 0;
+		bufferInfo.range = sizeof(particle) * buffers[INSTANCE]->size;  //  BUFFER SIZE FOR COMPUTE!
+
+
+		VkDescriptorBufferInfo UBI = {};
+		UBI.buffer = compute.uniformBuffer;
+		UBI.offset = 0;
+		UBI.range = sizeof(ComputeConfig::computeUBO);
+
+		// Binding 0 : Particle position storage buffer
+		VkWriteDescriptorSet storageDesc{};
+		storageDesc.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		storageDesc.dstSet = compute.descriptorSet[1];
+		storageDesc.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+		storageDesc.dstBinding = 0;
+		storageDesc.pBufferInfo = &bufferInfo;
+		storageDesc.descriptorCount = 1;
+
+		// Binding 1 : Uniform buffer
+		VkWriteDescriptorSet uniformDesc{};
+		uniformDesc.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		uniformDesc.dstSet = compute.descriptorSet[1];
+		uniformDesc.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		uniformDesc.dstBinding = 1;
+		uniformDesc.pBufferInfo = &UBI;
+		uniformDesc.descriptorCount = 1;
+
+		std::vector<VkWriteDescriptorSet> computeWriteDescriptorSets = { storageDesc, uniformDesc };
+
+		// create sets
+		vkUpdateDescriptorSets(device, static_cast<uint32_t>(computeWriteDescriptorSets.size()), computeWriteDescriptorSets.data(), 0, NULL);
+
+	}
 
 	// Create pipeline
 	 
@@ -2141,13 +2183,10 @@ void Application::prepareCompute()
 	// Build a single command buffer containing the compute dispatch commands
 	buildComputeCommandBuffer(0);
 	buildComputeCommandBuffer(1);
-
-	//vkMapMemory(device, buffers[INSTANCE]->memory, 0, buffers[INSTANCE]->size * sizeof(particle), 0, &returnParticles);
 }
 
 void Application::updateCompute()
 {
-
 	auto newTime = std::chrono::system_clock::now();
 	float frameTime = std::chrono::duration_cast<std::chrono::milliseconds>(newTime - currentTime).count(); 
 	currentTime = newTime;  
@@ -2158,20 +2197,4 @@ void Application::updateCompute()
 	vkMapMemory(device, compute.uboMem, 0, sizeof(compute.ubo), 0, &compute.mapped);
 	memcpy(compute.mapped, &compute.ubo, sizeof(compute.ubo));
 	vkUnmapMemory(device, compute.uboMem);
-
-
- //   //print buffer
-	//if (returnParticles == nullptr)
-	//	return;
-	//   
-	//for (int i = 0; i < 2; ++i) { 
-	//	std::cout << "Return " << i << ": "
-	//		<< ((particle *)returnParticles)[i].pos.x << " "
-	//		<< ((particle *)returnParticles)[i].pos.y << " "
-	//		<< ((particle *)returnParticles)[i].pos.z << " "
-	//		<< ((particle *)returnParticles)[i].vel.x << " "
-	//		<< ((particle *)returnParticles)[i].vel.y << " "
-	//		<< ((particle *)returnParticles)[i].vel.z << " "
-	//		<< std::endl; 
- //	}    
 }

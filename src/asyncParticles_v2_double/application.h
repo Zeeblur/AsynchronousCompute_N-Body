@@ -188,7 +188,8 @@ private:
 		VkCommandBuffer commandBuffer[2];			// 2 Command buffer storing the dispatch commands and barriers
 		VkFence fence;								// Synchronization fence to avoid rewriting compute CB if still in use
 		VkDescriptorSetLayout descriptorSetLayout;	// Compute shader binding layout
-		VkDescriptorSet descriptorSet;				// Compute shader bindings
+		VkDescriptorSet descriptorSet[2];				// Compute shader bindings (FOR 1 AND 2)!!!!!
+
 		VkPipelineLayout pipelineLayout;			// Layout of the compute pipeline
 		VkPipeline pipeline;						// Compute pipeline for updating particle positions
 
@@ -355,6 +356,7 @@ private:
 
 	// get memory back and count
 	void * returnParticles;
+	void * returnParicles2;
 
 	// timer vars
 	uint32_t frameCounter, lastFPS;
@@ -514,8 +516,8 @@ struct InstanceBO : BufferObject
 		Application::get()->createBuffer(bufferSize,
 			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
 			//  for getting data back
-			//VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
-			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+			//VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
 			buffers[0],
 			memory[0]); 
 
@@ -550,8 +552,9 @@ struct InstanceBO : BufferObject
 		// note usage is INDEX buffer. and storage for compute
 		Application::get()->createBuffer(bufferSize,
 			VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-			//  for getting data back VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
-			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+			//  for getting data back
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+			//VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
 			buffers[1],
 			memory[1]);
 
