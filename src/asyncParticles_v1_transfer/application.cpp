@@ -1686,12 +1686,14 @@ bool Application::isDeviceSuitable(VkPhysicalDevice device)
 	vkGetPhysicalDeviceFeatures(device, &deviceFeatures);
 
 	// Don't choose 1080
+#ifdef AMD
 	char *output = NULL;
 	output = strstr(deviceProperties.deviceName, "GTX");
 	if (output) {
 		printf("1080 Found");
 		return false;
 	}
+#endif // AMD
 
 	// is this a discrete gpu and does it have geom capabilities 
 	bool physical = deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU &&

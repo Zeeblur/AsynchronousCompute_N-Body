@@ -1163,9 +1163,9 @@ void Application::createDescriptorPool()
 	// how many and what type
 	std::vector<VkDescriptorPoolSize> poolSize = { VkDescriptorPoolSize(), VkDescriptorPoolSize(), VkDescriptorPoolSize() };
 	poolSize[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	poolSize[0].descriptorCount = 2;
+	poolSize[0].descriptorCount = 3;
 	poolSize[1].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-	poolSize[1].descriptorCount = 1;
+	poolSize[1].descriptorCount = 2;
 	poolSize[2].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 	poolSize[2].descriptorCount = 1;
 
