@@ -1,4 +1,5 @@
-#include "application.h"
+#include "renderer.h"
+#include "nbody.h"
 #include <set>
 #include <chrono>
 #define GLM_FORCE_RADIANS
@@ -11,7 +12,7 @@
 #define VK_FLAGS_NONE 0
 
 
-void Application::initWindow()
+void Renderer::initWindow()
 {
 	glfwInit();
 
@@ -21,10 +22,10 @@ void Application::initWindow()
 
 	// create call back gfor resize
 	glfwSetWindowUserPointer(window, this);
-	glfwSetWindowSizeCallback(window, Application::onWindowResized);
+	glfwSetWindowSizeCallback(window, Renderer::onWindowResized);
 } 
 
-void Application::initVulkan()
+void Renderer::initVulkan()
 {
 	createInstance();
 	setupDebugCallback();
@@ -53,7 +54,7 @@ void Application::initVulkan()
 	}
 }
 
-void Application::createConfig(int pCount)
+void Renderer::createConfig(int pCount)
 {
 	PARTICLE_COUNT = pCount;
 	createVertexBuffer();
@@ -68,7 +69,7 @@ void Application::createConfig(int pCount)
 	prepareCompute();
 }
 
-void Application::mainLoop()
+void Renderer::mainLoop()
 {
 	while (!glfwWindowShouldClose(window))
 	{
@@ -81,6 +82,7 @@ void Application::mainLoop()
 
 		updateUniformBuffer();   // update
 		drawFrame();			 // render
+		dispatchCompute();
 		updateCompute();		 // update 
 
 		frameCounter++;
@@ -104,7 +106,7 @@ void Application::mainLoop()
 
 }
  
-void Application::cleanupSwapChain()
+void Renderer::cleanupSwapChain()
 {
 	vkDestroyImageView(device, depthImageView, nullptr);
 	vkDestroyImage(device, depthImage, nullptr);
@@ -129,7 +131,7 @@ void Application::cleanupSwapChain()
 	vkDestroySwapchainKHR(device, swapChain, nullptr);
 }
 
-void Application::cleanup()
+void Renderer::cleanup()
 {
 	cleanupSwapChain();
 
@@ -177,7 +179,7 @@ void Application::cleanup()
 	glfwTerminate();
 }
 
-void Application::recreateSwapChain()
+void Renderer::recreateSwapChain()
 {
 	vkDeviceWaitIdle(device);
 
@@ -193,7 +195,7 @@ void Application::recreateSwapChain()
 }
 
 // create a struct with driver specific details
-void Application::createInstance()
+void Renderer::createInstance()
 {
 	// check if validation layers exist
 	if (enableValidationLayers && !checkValidationLayerSupport())
@@ -237,7 +239,7 @@ void Application::createInstance()
 }
 
 // set up callbacks if needed
-void Application::setupDebugCallback()
+void Renderer::setupDebugCallback()
 {
 	// not enabled so don't initialise
 	if (!enableValidationLayers) return;
@@ -256,14 +258,14 @@ void Application::setupDebugCallback()
 }
 
 // create surface for interfacing with GLFW to render things on screen
-void Application::createSurface()
+void Renderer::createSurface()
 {
 	if (glfwCreateWindowSurface(instance, window, nullptr, &surface) != VK_SUCCESS)
 		throw std::runtime_error("Failed to create glfw surface.");
 }
 
 // select GPU that supports the features needed
-void Application::pickPhysicalDevice()
+void Renderer::pickPhysicalDevice()
 {
 	// find devices and store in vector
 	uint32_t deviceCount = 0;
@@ -295,20 +297,21 @@ void Application::pickPhysicalDevice()
 }
 
 // create a logic device + queues
-void Application::createLogicalDevice()
+void Renderer::createLogicalDevice()
 {
 	// specify the queues to create
 	// returns indicies of queues that can support graphics calls
 	QueueFamilyIndices indices = findQueuesFamilies(physicalDevice);
 
 	std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
-	std::set<int> uniqueQFamilies = { indices.graphicsFamily, indices.presentFamily };
+	std::set<int> uniqueQFamilies = { indices.graphicsFamily, indices.presentFamily, indices.computeFamily };
 	
 	queueFamilyIndices.graphics = indices.graphicsFamily;
+	queueFamilyIndices.compute = indices.computeFamily;
 	queueFamilyIndices.present = indices.presentFamily;
 
 	// influence sheduling of the command buffer (NEEDED EVEN IF ONLY 1 Q)
-	float queuePriority = 1.0f;
+	float queuePriority[2] = { 1.0f, 1.0f };
 
 	// for each unique queue family, create a new info for them and add to list
 	for (int queueFam : uniqueQFamilies)
@@ -323,8 +326,8 @@ void Application::createLogicalDevice()
 		// this is either graphics/surface etc
 		qCreateInfo.queueFamilyIndex = queueFam;
 
-		qCreateInfo.pQueuePriorities = &queuePriority;
-		qCreateInfo.queueCount = 1;
+		qCreateInfo.pQueuePriorities = queuePriority;
+		qCreateInfo.queueCount = (queueFam == indices.graphicsFamily && queueFam == indices.computeFamily) ? 2 : 1;
 
 		// add to list
 		queueCreateInfos.push_back(qCreateInfo);
@@ -361,12 +364,15 @@ void Application::createLogicalDevice()
 		throw std::runtime_error("Failed to create logical device!");
 
 	vkGetDeviceQueue(device, indices.graphicsFamily, 0, &graphicsQueue);
-	vkGetDeviceQueue(device, indices.presentFamily, 0, &presentQueue);
+	vkGetDeviceQueue(device, indices.presentFamily, (indices.graphicsFamily == indices.computeFamily) ? 1 : 0, &presentQueue);
+	vkGetDeviceQueue(device, indices.computeFamily, 0, &compute.queue);
+	std::cout << "Graphics queue: " << graphicsQueue << std::endl;
+	std::cout << "Compute queue: " << compute.queue << std::endl;
 	
 }
 
 // create swapchain
-void Application::createSwapChain()
+void Renderer::createSwapChain()
 {
 	// get capabilities
 	SwapChainSupportDetails swapChainSupport = querySwapChainSupport(physicalDevice);
@@ -460,7 +466,7 @@ void Application::createSwapChain()
 }
 
 // create image views for the swapchain images so they can be used in the render pipeline.
-void Application::createImageViews()
+void Renderer::createImageViews()
 {
 	// resize list to store all created images
 	swapChainImageViews.resize(swapChainImages.size());
@@ -498,7 +504,7 @@ void Application::createImageViews()
 }
 
 // render pass - specifies buffers and samples 
-void Application::createRenderPass()
+void Renderer::createRenderPass()
 {
 	// create a single colour buffer represented by a swap chain image
 	VkAttachmentDescription colourAttachment = {};
@@ -589,7 +595,7 @@ void Application::createRenderPass()
 
 }
 
-void Application::createDescriptorSetLayout()
+void Renderer::createDescriptorSetLayout()
 {
 	// bind through a layoutstruct  -- set as uniform buffer
 	VkDescriptorSetLayoutBinding uboLayoutBinding = {};
@@ -619,7 +625,7 @@ void Application::createDescriptorSetLayout()
 }
 
 // these need to be recreated with any shader change etc.
-void Application::createGraphicsPipeline()
+void Renderer::createGraphicsPipeline()
 {
 	// read in shader files.
 	auto vertShaderCode = readFile("res/shaders/vert.spv");
@@ -840,7 +846,7 @@ void Application::createGraphicsPipeline()
 }
 
 // create frame buffers for the images in the swap chain
-void Application::createFramebuffers()
+void Renderer::createFramebuffers()
 {
 	// resize list for size of swap chain images
 	swapChainFramebuffers.resize(swapChainImageViews.size());
@@ -868,7 +874,7 @@ void Application::createFramebuffers()
 
 // record operations to perform (like drawing and memory transfers) in command buffer objects
 // command pool stores these buffers 
-void Application::createCommandPool()
+void Renderer::createCommandPool()
 {
 	QueueFamilyIndices queueFamilyIndices = findQueuesFamilies(physicalDevice);
 
@@ -884,60 +890,8 @@ void Application::createCommandPool()
 	
 }
 
-// create buffer in memory - allocate and map
-void Application::createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory)
-{
-	// create struct as usual
-	VkBufferCreateInfo bufferInfo = {};
-	bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-	// how big is the buffer (enough to store the size of 1 obj * how many)
-	bufferInfo.size = size;
-
-	// what purpose is this buffer going to be used for ( can use multiple things)
-	bufferInfo.usage = usage;
-
-	// buffer only used by the graphics queue so it can be exclusive
-	bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-	// create it
-	if (vkCreateBuffer(device, &bufferInfo, nullptr, &buffer) != VK_SUCCESS)
-	{
-		throw std::runtime_error("Failed to create buffer");
-	}
-
-	// Memory requirements
-	VkMemoryRequirements memRequirements;
-	vkGetBufferMemoryRequirements(device, buffer, &memRequirements);
-
-	// determine memory type to allocate 
-	VkMemoryAllocateInfo allocInfo = {};
-	allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-	allocInfo.allocationSize = memRequirements.size;
-	allocInfo.memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, properties);
-
-	// allocate memory
-	if (vkAllocateMemory(device, &allocInfo, nullptr, &bufferMemory) != VK_SUCCESS)
-		throw std::runtime_error("Failed to allocate buffer memory");
-
-	// bind memory to the buffer (int is offset)
-	vkBindBufferMemory(device, buffer, bufferMemory, 0);
-}
-
-// copy data between buffers
-void Application::copyBuffer(VkBuffer srcBuff, VkBuffer targetBuff, VkDeviceSize size)
-{
-	VkCommandBuffer commandBuffer = beginSingleTimeCommands();
-
-	VkBufferCopy copyRegion = {};
-	copyRegion.size = size;
-	vkCmdCopyBuffer(commandBuffer, srcBuff, targetBuff, 1, &copyRegion);
-
-	endSingleTimeCommands(commandBuffer);
-
-}
-
 // handle layout condistions
-void Application::transitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout)
+void Renderer::transitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout)
 {
 	VkCommandBuffer commandBuffer = beginSingleTimeCommands();
 
@@ -1013,7 +967,7 @@ void Application::transitionImageLayout(VkImage image, VkFormat format, VkImageL
 }
 
 
-void Application::copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height)
+void Renderer::copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height)
 {
 	VkCommandBuffer commandBuffer = beginSingleTimeCommands();
 
@@ -1038,7 +992,7 @@ void Application::copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t wid
 }
 
 // depth buffering - need image, imageview and layout
-void Application::createDepthResources()
+void Renderer::createDepthResources()
 {
 	VkFormat depthFormat = findDepthFormat();
 
@@ -1048,7 +1002,7 @@ void Application::createDepthResources()
 	transitionImageLayout(depthImage, depthFormat, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
 }
 
-VkFormat Application::findSupportedFormat(const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features)
+VkFormat Renderer::findSupportedFormat(const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features)
 {
 	for (VkFormat format : candidates)
 	{
@@ -1068,7 +1022,7 @@ VkFormat Application::findSupportedFormat(const std::vector<VkFormat>& candidate
 	throw std::runtime_error("failed to find supported format!");
 }
 
-VkFormat Application::findDepthFormat()
+VkFormat Renderer::findDepthFormat()
 {
 	return findSupportedFormat
 	(
@@ -1078,31 +1032,31 @@ VkFormat Application::findDepthFormat()
 	);
 }
 
-bool Application::hasStencilComponent(VkFormat format)
+bool Renderer::hasStencilComponent(VkFormat format)
 {
 	return format == VK_FORMAT_D32_SFLOAT_S8_UINT || format == VK_FORMAT_D24_UNORM_S8_UINT;
 }
 
 
 // create vertex buffer objs and index buffers
-void Application::createVertexBuffer()
+void Renderer::createVertexBuffer()
 {
-	buffers[VERTEX]->createBuffer();
+	buffers[VERTEX]->createSpecificBuffer();
 }
 
-void Application::createInstanceBuffer()
+void Renderer::createInstanceBuffer()
 {
-	buffers[INSTANCE]->createBuffer();
+	buffers[INSTANCE]->createSpecificBuffer();
 }
 
 // create index buffer
-void Application::createIndexBuffer()
+void Renderer::createIndexBuffer()
 {
-	buffers[INDEX]->createBuffer();
+	buffers[INDEX]->createSpecificBuffer();
 }
 
 // create uniform Buffer
-void Application::createUniformBuffer()
+void Renderer::createUniformBuffer()
 {
 	VkDeviceSize bufferSize = sizeof(UniformBufferObject);
 	createBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, uniformBuffer, uniformBufferMemory);
@@ -1110,7 +1064,7 @@ void Application::createUniformBuffer()
 
 // create descriptor pool to create them (liuke command buffers)
 // specifies a buffer resource to bind the uniform descriptor to
-void Application::createDescriptorPool()
+void Renderer::createDescriptorPool()
 {
 	// how many and what type
 	std::vector<VkDescriptorPoolSize> poolSize = { VkDescriptorPoolSize(), VkDescriptorPoolSize(), VkDescriptorPoolSize() };
@@ -1136,7 +1090,7 @@ void Application::createDescriptorPool()
 }
 
 // allocate the descriptors. - pool to allocate from, how many to allocate, and the layout to base them on
-void Application::createDescriptorSet()
+void Renderer::createDescriptorSet()
 {
 	VkDescriptorSetLayout layouts[] = { descriptorSetLayout };
 	VkDescriptorSetAllocateInfo allocInfo = {};
@@ -1184,7 +1138,7 @@ void Application::createDescriptorSet()
 }
 
 // record the commands!
-void Application::createCommandBuffers()
+void Renderer::createCommandBuffers()
 {
 	// resize allocation for frame buffers
 	commandBuffers.resize(swapChainFramebuffers.size());
@@ -1273,7 +1227,7 @@ void Application::createCommandBuffers()
 }
 
 // create semaphores for rendering synchronisation
-void Application::createSemaphores()
+void Renderer::createSemaphores()
 {
 	VkSemaphoreCreateInfo semaphoreInfo = {};
 	semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
@@ -1287,7 +1241,7 @@ void Application::createSemaphores()
 }
 
 // get image from swapchain, execute command buffer with that image in the framebuffer, return the image to the swap chain for presentation
-void Application::drawFrame()
+void Renderer::drawFrame()
 {
 	// asynchronous calls so need to use semaphores/fences
 
@@ -1361,6 +1315,10 @@ void Application::drawFrame()
 		throw std::runtime_error("failed to present swap chain image!");
 	}
 
+}
+
+void Renderer::dispatchCompute()
+{
 	// wait until presentation is finished before drawing the next frame
 	vkQueueWaitIdle(presentQueue);  
 
@@ -1390,7 +1348,7 @@ void Application::drawFrame()
 
 }
 
-void Application::createTextureImage()
+void Renderer::createTextureImage()
 {
 	int texWidth, texHeight, texChannels;
 	stbi_uc* pixels = stbi_load("res/textures/kitty.png", &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
@@ -1421,12 +1379,12 @@ void Application::createTextureImage()
 	vkFreeMemory(device, stagingBufferMemory, nullptr);
 }
 
-void Application::createTextureImageView()
+void Renderer::createTextureImageView()
 {
 	textureImageView = createImageView(textureImage, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_ASPECT_COLOR_BIT);
 }
 
-void Application::createTextureSampler()
+void Renderer::createTextureSampler()
 {
 	VkSamplerCreateInfo samplerInfo = {};
 	samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
@@ -1448,7 +1406,7 @@ void Application::createTextureSampler()
 	}
 }
 
-VkImageView Application::createImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags)
+VkImageView Renderer::createImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags)
 {
 	VkImageViewCreateInfo viewInfo = {};
 	viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -1469,7 +1427,7 @@ VkImageView Application::createImageView(VkImage image, VkFormat format, VkImage
 	return imageView;
 }
 
-void Application::createImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory)
+void Renderer::createImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory)
 {
 	VkImageCreateInfo imageInfo = {};
 	imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -1505,40 +1463,7 @@ void Application::createImage(uint32_t width, uint32_t height, VkFormat format, 
 	vkBindImageMemory(device, image, imageMemory, 0);
 }
 
-VkCommandBuffer Application::beginSingleTimeCommands() {
-	VkCommandBufferAllocateInfo allocInfo = {};
-	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-	allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-	allocInfo.commandPool = gfxCommandPool;
-	allocInfo.commandBufferCount = 1;
-
-	VkCommandBuffer commandBuffer;
-	vkAllocateCommandBuffers(device, &allocInfo, &commandBuffer);
-
-	VkCommandBufferBeginInfo beginInfo = {};
-	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-	beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-
-	vkBeginCommandBuffer(commandBuffer, &beginInfo);
-
-	return commandBuffer;
-}
-
-void Application::endSingleTimeCommands(VkCommandBuffer commandBuffer) {
-	vkEndCommandBuffer(commandBuffer);
-
-	VkSubmitInfo submitInfo = {};
-	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-	submitInfo.commandBufferCount = 1;
-	submitInfo.pCommandBuffers = &commandBuffer;
-
-	vkQueueSubmit(graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
-	vkQueueWaitIdle(graphicsQueue);
-
-	vkFreeCommandBuffers(device, gfxCommandPool, 1, &commandBuffer);
-}
-
-void Application::updateUniformBuffer()
+void Renderer::updateUniformBuffer()
 { 
 	static auto startTime = std::chrono::high_resolution_clock::now();  
 
@@ -1557,7 +1482,7 @@ void Application::updateUniformBuffer()
 }
 
 // wrapper to pass the shader code to the pipeline
-VkShaderModule Application::createShaderModule(const std::vector<char>& code)
+VkShaderModule Renderer::createShaderModule(const std::vector<char>& code)
 {
 	VkShaderModuleCreateInfo createInfo = {};
 	createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
@@ -1577,7 +1502,7 @@ VkShaderModule Application::createShaderModule(const std::vector<char>& code)
 }
 
 // check if validation layers are supported by the gpu
-bool Application::checkValidationLayerSupport()
+bool Renderer::checkValidationLayerSupport()
 {
 	// find layers.
 	uint32_t layerCount;
@@ -1609,7 +1534,7 @@ bool Application::checkValidationLayerSupport()
 }
 
 // check for extensions and return a list (based on if validation layers are enabled)
-std::vector<const char*> Application::getExtensions()
+std::vector<const char*> Renderer::getExtensions()
 {
 	std::vector<const char*> extensions;
 
@@ -1630,13 +1555,24 @@ std::vector<const char*> Application::getExtensions()
 }
 
 // check for device capability
-bool Application::isDeviceSuitable(VkPhysicalDevice device)
+bool Renderer::isDeviceSuitable(VkPhysicalDevice device)
 {
 	// check for physical properties
 	VkPhysicalDeviceProperties deviceProperties;
 	VkPhysicalDeviceFeatures deviceFeatures = {};
 	vkGetPhysicalDeviceProperties(device, &deviceProperties);
 	vkGetPhysicalDeviceFeatures(device, &deviceFeatures);
+
+// Don't choose 1080
+#ifdef AMD
+	char *output = NULL;
+	output = strstr(deviceProperties.deviceName, "GTX");
+	if (output)
+	{
+		printf("1080 Found");
+		return false;
+	}
+#endif // AMD
 
 	// is this a discrete gpu and does it have geom capabilities 
 	bool physical = deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU &&
@@ -1656,7 +1592,7 @@ bool Application::isDeviceSuitable(VkPhysicalDevice device)
 }
 
 // check if all extensions include required ones
-bool Application::checkDeviceExtensionSupport(VkPhysicalDevice device)
+bool Renderer::checkDeviceExtensionSupport(VkPhysicalDevice device)
 {
 	// get extensions
 	uint32_t extensionCount;
@@ -1678,7 +1614,7 @@ bool Application::checkDeviceExtensionSupport(VkPhysicalDevice device)
 
 
 // query info
-uint32_t Application::findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties)
+uint32_t Renderer::findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties)
 {
 	// query info about the avaliable types of memory
 	VkPhysicalDeviceMemoryProperties memProperties;
@@ -1696,7 +1632,7 @@ uint32_t Application::findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags 
 	throw std::runtime_error("Failed to fins suitable memory type!");
 }
 
-VKAPI_ATTR VkBool32 VKAPI_CALL Application::debugCallback(VkDebugReportFlagsEXT flags, VkDebugReportObjectTypeEXT objType, uint64_t obj, size_t location, int32_t code, const char * layerPrefix, const char * msg, void * userData)
+VKAPI_ATTR VkBool32 VKAPI_CALL Renderer::debugCallback(VkDebugReportFlagsEXT flags, VkDebugReportObjectTypeEXT objType, uint64_t obj, size_t location, int32_t code, const char * layerPrefix, const char * msg, void * userData)
 {
 	std::cerr << "validation layer: " << msg << std::endl;
 
@@ -1711,7 +1647,7 @@ VKAPI_ATTR VkBool32 VKAPI_CALL Application::debugCallback(VkDebugReportFlagsEXT 
 
 // have to look up callback address using vkGetInstanceProcAddr.
 // create own proxy function that handles this in the background
-VkResult Application::CreateDebugReportCallbackEXT(VkInstance instance, const VkDebugReportCallbackCreateInfoEXT* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDebugReportCallbackEXT* pCallback) {
+VkResult Renderer::CreateDebugReportCallbackEXT(VkInstance instance, const VkDebugReportCallbackCreateInfoEXT* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDebugReportCallbackEXT* pCallback) {
 	auto func = (PFN_vkCreateDebugReportCallbackEXT)vkGetInstanceProcAddr(instance, "vkCreateDebugReportCallbackEXT");
 	
 	if (func != nullptr) 
@@ -1722,7 +1658,7 @@ VkResult Application::CreateDebugReportCallbackEXT(VkInstance instance, const Vk
 }
 
 // clear memory
-void Application::DestroyDebugReportCallbackEXT(VkInstance instance, VkDebugReportCallbackEXT callback, const VkAllocationCallbacks* pAllocator) {
+void Renderer::DestroyDebugReportCallbackEXT(VkInstance instance, VkDebugReportCallbackEXT callback, const VkAllocationCallbacks* pAllocator) {
 	auto func = (PFN_vkDestroyDebugReportCallbackEXT)vkGetInstanceProcAddr(instance, "vkDestroyDebugReportCallbackEXT");
 	
 	if (func != nullptr)
@@ -1731,7 +1667,7 @@ void Application::DestroyDebugReportCallbackEXT(VkInstance instance, VkDebugRepo
 }
 
 // find and return the queuefamilies that support graphics 
-QueueFamilyIndices Application::findQueuesFamilies(VkPhysicalDevice device)
+QueueFamilyIndices Renderer::findQueuesFamilies(VkPhysicalDevice device)
 {
 	QueueFamilyIndices indices;
 
@@ -1746,18 +1682,29 @@ QueueFamilyIndices Application::findQueuesFamilies(VkPhysicalDevice device)
 	unsigned int i = 0;
 	for (const auto& queueFamily : queueFamilies)
 	{
+		// check for avail queue families
+		int queueCount = queueFamily.queueCount;
+		if (queueCount > 0)
+		{
+			queueCount--;
+			// don't use same queue fam twice - unlesss it's got multiple queues
+			// check for drawing command support
+			if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)
+				indices.graphicsFamily = i;
 
-		// check for presentation support to window
-		VkBool32 presentSupport = false;
-		vkGetPhysicalDeviceSurfaceSupportKHR(device, i, surface, &presentSupport);
-		if (queueFamily.queueCount > 0 && presentSupport)
-			indices.presentFamily = i;
-	
+			// check for compute support & if unused queue
+			if (queueCount > 0 && queueFamily.queueFlags & VK_QUEUE_COMPUTE_BIT)
+				indices.computeFamily = i;
 
-		// check for drawing command support
-		if (queueFamily.queueCount > 0 && queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)
-			indices.graphicsFamily = i;
-	
+			// check for presentation support to window
+			VkBool32 presentSupport = false;
+			vkGetPhysicalDeviceSurfaceSupportKHR(device, i, surface, &presentSupport);
+			if (presentSupport)
+				indices.presentFamily = i;
+
+		}
+
+		// check all have been assigned
 		if (indices.isComplete())
 			break;
 
@@ -1768,7 +1715,7 @@ QueueFamilyIndices Application::findQueuesFamilies(VkPhysicalDevice device)
 }
  
 // check swapchain support for surface format, presentation mode, swap extent.
-SwapChainSupportDetails Application::querySwapChainSupport(VkPhysicalDevice device) {
+SwapChainSupportDetails Renderer::querySwapChainSupport(VkPhysicalDevice device) {
 	SwapChainSupportDetails details;
 
 	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, surface, &details.capabilities);
@@ -1793,7 +1740,7 @@ SwapChainSupportDetails Application::querySwapChainSupport(VkPhysicalDevice devi
 }
 
 // format: contains a format (Specifying the colour channels and types) and colourspace.
-VkSurfaceFormatKHR Application::chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats)
+VkSurfaceFormatKHR Renderer::chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats)
 {
 	// use SRGB for colour space - more accurate percieved colours. 
 	// But use standard RGB for the colour format.
@@ -1815,10 +1762,10 @@ VkSurfaceFormatKHR Application::chooseSwapSurfaceFormat(const std::vector<VkSurf
 }
 
 // Actual conditions for displaying to the screen !!!!
-VkPresentModeKHR Application::chooseSwapPresentMode(const std::vector<VkPresentModeKHR> availablePresentModes)
+VkPresentModeKHR Renderer::chooseSwapPresentMode(const std::vector<VkPresentModeKHR> availablePresentModes)
 {
 	// this is always guaranteed to be avalible. -- SIMILAR TO VSYNC. - takes a frame when the display is refreshed and the program adds frames to the end of the queue.
-	// blocks application when display queue is full (double buffering)
+	// blocks Renderer when display queue is full (double buffering)
 	VkPresentModeKHR bestMode = VK_PRESENT_MODE_FIFO_KHR;
 
 	for (const auto& availablePresentMode : availablePresentModes)
@@ -1843,7 +1790,7 @@ VkPresentModeKHR Application::chooseSwapPresentMode(const std::vector<VkPresentM
 }
 
 // Swap extent is the resolution of the swap chain images - try to match the window
-VkExtent2D Application::chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities)
+VkExtent2D Renderer::chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities)
 {
 	int width, height;
 	glfwGetWindowSize(window, &width, &height);
@@ -1865,7 +1812,7 @@ VkExtent2D Application::chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabil
 	}
 }
 
-void Application::setVertexData(const std::vector<Vertex> vert, const std::vector<uint16_t> ind, const std::vector<particle> part)
+void Renderer::setVertexData(const std::vector<Vertex> vert, const std::vector<uint16_t> ind, const std::vector<particle> part)
 {
 	// copy data
 	dynamic_cast<VertexBO*>(buffers[VERTEX])->vertices = vert;
@@ -1874,7 +1821,7 @@ void Application::setVertexData(const std::vector<Vertex> vert, const std::vecto
 
 }
 
-int Application::findComputeQueueFamily(VkPhysicalDevice pd)
+int Renderer::findComputeQueueFamily(VkPhysicalDevice pd)
 {
 	// find and return the index of compute queue family for device
 
@@ -1904,7 +1851,7 @@ int Application::findComputeQueueFamily(VkPhysicalDevice pd)
 	return index;
 }
 
-void Application::buildComputeCommandBuffer()
+void Renderer::buildComputeCommandBuffer()
 {
 	// create command buffer
 	VkCommandBufferBeginInfo cmdBufInfo{};
@@ -1974,7 +1921,7 @@ void Application::buildComputeCommandBuffer()
 
 }
 
-void Application::createComputeUBO()
+void Renderer::createComputeUBO()
 {
 	compute.ubo.particleCount = PARTICLE_COUNT;
 	compute.ubo.deltaT = 0.016f;
@@ -1986,7 +1933,7 @@ void Application::createComputeUBO()
 		compute.uniformBuffer, compute.uboMem);  // buffer pointer and memory
 }
 
-void Application::prepareCompute()
+void Renderer::prepareCompute()
 {
 	createComputeUBO();
 
@@ -2144,7 +2091,7 @@ void Application::prepareCompute()
 	buildComputeCommandBuffer();
 }
 
-void Application::updateCompute()
+void Renderer::updateCompute()
 {
 
 	auto newTime = std::chrono::system_clock::now();
@@ -2157,20 +2104,90 @@ void Application::updateCompute()
 	vkMapMemory(device, compute.uboMem, 0, sizeof(compute.ubo), 0, &compute.mapped);
 	memcpy(compute.mapped, &compute.ubo, sizeof(compute.ubo));
 	vkUnmapMemory(device, compute.uboMem);
+ 
+}
 
+void Renderer::createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory)
+{
+	// create struct as usual
+	VkBufferCreateInfo bufferInfo = {};
+	bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+	// how big is the buffer (enough to store the size of 1 obj * how many)
+	bufferInfo.size = size;
 
- //   //print buffer
-	//if (returnParticles == nullptr)
-	//	return;
-	//   
-	//for (int i = 0; i < 2; ++i) { 
-	//	std::cout << "Return " << i << ": "
-	//		<< ((particle *)returnParticles)[i].pos.x << " "
-	//		<< ((particle *)returnParticles)[i].pos.y << " "
-	//		<< ((particle *)returnParticles)[i].pos.z << " "
-	//		<< ((particle *)returnParticles)[i].vel.x << " "
-	//		<< ((particle *)returnParticles)[i].vel.y << " "
-	//		<< ((particle *)returnParticles)[i].vel.z << " "
-	//		<< std::endl;
- //	}    
+	// what purpose is this buffer going to be used for ( can use multiple things)
+	bufferInfo.usage = usage;
+
+	// buffer only used by the graphics queue so it can be exclusive
+	bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+	// create it
+	if (vkCreateBuffer(device, &bufferInfo, nullptr, &buffer) != VK_SUCCESS)
+	{
+		throw std::runtime_error("Failed to create buffer");
+	}
+
+	// Memory requirements
+	VkMemoryRequirements memRequirements;
+	vkGetBufferMemoryRequirements(device, buffer, &memRequirements);
+
+	// determine memory type to allocate 
+	VkMemoryAllocateInfo allocInfo = {};
+	allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+	allocInfo.allocationSize = memRequirements.size;
+	allocInfo.memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, properties);
+
+	// allocate memory
+	if (vkAllocateMemory(device, &allocInfo, nullptr, &bufferMemory) != VK_SUCCESS)
+		throw std::runtime_error("Failed to allocate buffer memory");
+
+	// bind memory to the buffer (int is offset)
+	vkBindBufferMemory(device, buffer, bufferMemory, 0);
+}
+
+VkCommandBuffer Renderer::beginSingleTimeCommands()
+{
+	VkCommandBufferAllocateInfo allocInfo = {};
+	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+	allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+	allocInfo.commandPool = gfxCommandPool;
+	allocInfo.commandBufferCount = 1;
+
+	VkCommandBuffer commandBuffer;
+	vkAllocateCommandBuffers(device, &allocInfo, &commandBuffer);
+
+	VkCommandBufferBeginInfo beginInfo = {};
+	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+	beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+	vkBeginCommandBuffer(commandBuffer, &beginInfo);
+
+	return commandBuffer;
+}
+
+void Renderer::endSingleTimeCommands(VkCommandBuffer commandBuffer)
+{
+	vkEndCommandBuffer(commandBuffer);
+
+	VkSubmitInfo submitInfo = {};
+	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	submitInfo.commandBufferCount = 1;
+	submitInfo.pCommandBuffers = &commandBuffer;
+
+	vkQueueSubmit(graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
+	vkQueueWaitIdle(graphicsQueue);
+
+	vkFreeCommandBuffers(device, gfxCommandPool, 1, &commandBuffer);
+}
+
+void Renderer::copyBuffer(VkBuffer srcBuff, VkBuffer targetBuff, VkDeviceSize size)
+{
+	VkCommandBuffer commandBuffer = beginSingleTimeCommands();
+
+	VkBufferCopy copyRegion = {};
+	copyRegion.size = size;
+	vkCmdCopyBuffer(commandBuffer, srcBuff, targetBuff, 1, &copyRegion);
+
+	endSingleTimeCommands(commandBuffer);
+
 }

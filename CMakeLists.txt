@@ -74,6 +74,12 @@ target_link_libraries (particles_compute_only  ${EXTRA_LIBS})
 file(GLOB_RECURSE SOURCES3 src/asyncParticles_v1_transfer/*.cpp src/asyncParticles_v1_transfer/*.h external/*.h)
 add_executable(asyncParticles_v1_transfer ${SOURCES3})
 target_link_libraries (asyncParticles_v1_transfer  ${EXTRA_LIBS})
+
+## sim:
+
+file(GLOB_RECURSE SOURCES4 src/simulation_test/*.cpp src/simulation_test/*.h external/*.h)
+add_executable(simulation_test ${SOURCES4})
+target_link_libraries (simulation_test  ${EXTRA_LIBS})
   
  ## LINK:
  
@@ -94,6 +100,10 @@ target_include_directories(asyncParticles_v1_transfer PRIVATE external/)
 target_link_libraries(asyncParticles_v2_double glfw)
 target_link_libraries(asyncParticles_v2_double vulkan-1)
 target_include_directories(asyncParticles_v2_double PRIVATE external/)
+
+target_link_libraries(simulation_test glfw)
+target_link_libraries(simulation_test vulkan-1)
+target_include_directories(simulation_test PRIVATE external/)
 
 #add_custom_command(TARGET asyncParticles POST_BUILD
  # COMMAND ${CMAKE_COMMAND} -E copy_directory   "${PROJECT_SOURCE_DIR}/res" "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/$<CONFIG>/res")

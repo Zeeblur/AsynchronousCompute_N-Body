@@ -1,9 +1,10 @@
 #include <iostream>
 #include "nbody.h"
 
-int main() {
+int main(int argc, char **argv)
+{
 
-	nbody simulation(1<<12);
+	nbody simulation((1<<12)); // maximum in release so far with current res settings
 
 	try
 	{

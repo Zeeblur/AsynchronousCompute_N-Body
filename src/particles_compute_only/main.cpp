@@ -3,7 +3,7 @@
 
 int main() {
 
-	nbody simulation((1<<13)); // maximum in release so far with current res settings
+	nbody simulation((1<<12)); // maximum in release so far with current res settings
 
 	try
 	{

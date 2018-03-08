@@ -14,10 +14,12 @@
 #include <array>
 #include <memory>
 #include "particle.h"
+#include "buffer.h"
 #include <chrono>
 
 using namespace std::chrono;
 
+struct Vertex;
 
 // if debugging - do INSTANCE validation layers
 #ifdef NDEBUG
@@ -60,9 +62,11 @@ static std::vector<char> readFile(const std::string& filename)
 struct QueueFamilyIndices {
 	int graphicsFamily = -1;
 	int presentFamily = -1;
+	int computeFamily = -1;
 
+	// check if families are complete. gfx compute present
 	bool isComplete() {
-		return graphicsFamily >= 0 && presentFamily >= 0;
+		return graphicsFamily >= 0 && presentFamily >= 0 && computeFamily >= 0;
 	}
 };
 
@@ -73,79 +77,12 @@ struct SwapChainSupportDetails {
 	std::vector<VkPresentModeKHR> presentModes;
 };
 
-
-// structs to store vertex attributes
-struct Vertex
-{
-	glm::vec3 pos;
-	glm::vec3 colour;
-	glm::vec2 texCoord;
-
-	Vertex(glm::vec3 p, glm::vec3 c, glm::vec2 t) : pos(p), colour(c), texCoord(t){}
-
-	// how to pass to vertex shader
-	static VkVertexInputBindingDescription getBindingDescription()
-	{
-		VkVertexInputBindingDescription bindingDescription = {};
-
-		// 1 binding as all data is in 1 array. binding is index.
-		// stride is bytes between entries (in this case 1 whole vertex struct)
-		// move to the next data entry after each vertex (not instanced rendering)
-		bindingDescription.binding = 0;
-		bindingDescription.stride = sizeof(Vertex);
-		bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
-
-
-		return bindingDescription;
-	}
-
-	// get attribute descriptions...
-	static std::array<VkVertexInputAttributeDescription, 3> getAttributeDescription()
-	{
-		// 2 attributes (position and colour) so two description structs
-		std::array<VkVertexInputAttributeDescription, 3> attributeDesc = {};
-
-		attributeDesc[0].binding = 0; // which binding (the only one created above)
-		attributeDesc[0].location = 0; // which location of the vertex shader
-		attributeDesc[0].format = VK_FORMAT_R32G32B32_SFLOAT; // format as a vector 3 (3floats)
-		attributeDesc[0].offset = offsetof(Vertex, pos); // calculate the offset within each Vertex
-
-		// as above but for colour
-		attributeDesc[1].binding = 0; 
-		attributeDesc[1].location = 1;
-		attributeDesc[1].format = VK_FORMAT_R32G32B32_SFLOAT; // format as a vector 3 (3floats)
-		attributeDesc[1].offset = offsetof(Vertex, colour); 
-		 
-		// texture layout
-		attributeDesc[2].binding = 0;
-		attributeDesc[2].location = 2;
-		attributeDesc[2].format = VK_FORMAT_R32G32_SFLOAT;
-		attributeDesc[2].offset = offsetof(Vertex, texCoord);
-
-		return attributeDesc;
-	}
-};
-
-struct UniformBufferObject
-{
-	glm::mat4 model;
-	glm::mat4 view;
-	glm::mat4 proj;
-};
-
-enum bufferType
-{
-	VERTEX,
-	INDEX,
-	INSTANCE
-};
-
 struct BufferObject; // forward declare
 
 // Resources for the compute part of the example
 struct ComputeConfig;
 
-class Application
+class Renderer
 {
 private:
 	GLFWwindow* window;
@@ -239,7 +176,7 @@ private:
 	{
 		if (width == 0 || height == 0) return;
 
-		Application* app = reinterpret_cast<Application*>(glfwGetWindowUserPointer(window));
+		Renderer* app = reinterpret_cast<Renderer*>(glfwGetWindowUserPointer(window));
 		app->recreateSwapChain();
 	}
 
@@ -258,17 +195,13 @@ private:
 	void createCommandPool();
 	void createInstanceBuffer();
 
-
-
 	// texture stuff
 	void createTextureImage();
 	void createImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory);
-	VkCommandBuffer beginSingleTimeCommands();
-	void endSingleTimeCommands(VkCommandBuffer commandBuffer);
 	void transitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout);
 	void copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
 	void createTextureImageView();
-	VkImageView Application::createImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags);
+	VkImageView createImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags);
 	void createTextureSampler();
 
 	// depth buffer
@@ -289,11 +222,12 @@ private:
 	void createSemaphores();
 
 	void drawFrame();
+	void dispatchCompute();
 	void updateUniformBuffer();
 
 	// checks
 	bool checkValidationLayerSupport();
-	std::vector<const char*> Application::getExtensions();
+	std::vector<const char*> Renderer::getExtensions();
 	bool checkDeviceExtensionSupport(VkPhysicalDevice device);
 
 	bool isDeviceSuitable(VkPhysicalDevice device);
@@ -334,14 +268,10 @@ private:
 		VkDebugReportCallbackEXT callback,
 		const VkAllocationCallbacks* pAllocator);
 
-
 	const int WIDTH = 800;
 	const int HEIGHT = 600;
 
 	void prepareCompute();
-
-	// get memory back and count
-	void * returnParticles;
 
 	// timer vars
 	uint32_t frameCounter, lastFPS;
@@ -350,15 +280,11 @@ private:
 
 public:
 
-	inline static std::shared_ptr<Application> get()
+	inline static std::shared_ptr<Renderer> get()
 	{
-		static std::shared_ptr<Application> instance(new Application());
+		static std::shared_ptr<Renderer> instance(new Renderer());
 		return instance;
 	}
-
-	void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
-	void copyBuffer(VkBuffer srcBuff, VkBuffer targetBuff, VkDeviceSize size);
-
 
 	void init()
 	{
@@ -372,159 +298,16 @@ public:
 	void createConfig(int pCount);
 	int PARTICLE_COUNT = 0;
 
+	// buffer creation & copy functions
+	void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
+	void copyBuffer(VkBuffer srcBuff, VkBuffer targetBuff, VkDeviceSize size);
+
+	// command queue for recording & submitting copies
+	VkCommandBuffer beginSingleTimeCommands();
+	void endSingleTimeCommands(VkCommandBuffer commandBuffer);
+
 	void clean()
 	{
 		cleanup();
-	}
-};
-
-
-struct BufferObject
-{
-	VkDevice* dev;
-	VkBuffer buffer = VK_NULL_HANDLE;
-	VkDeviceMemory memory = VK_NULL_HANDLE;
-	size_t size = 0;
-
-	virtual void createBuffer() = 0;
-
-	~BufferObject()
-	{
-		vkDestroyBuffer(*dev, buffer, nullptr);
-		vkFreeMemory(*dev, memory, nullptr);
-	}
-};
-
-struct VertexBO : BufferObject
-{
-	std::vector<Vertex> vertices;
-	void createBuffer()
-	{
-		VkDeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
-		size = (size_t)bufferSize;
-
-		// create a staging buffer as a temp buffer and then the device has a local vertex  buffer.
-		VkBuffer stagingBuffer;
-		VkDeviceMemory stagingBufferMemory;
-		Application::get()->createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
-
-		// copy data to buffer
-		void* data;
-		// map buffer memory to the cpu
-		vkMapMemory(*dev, stagingBufferMemory, 0, bufferSize, 0, &data);
-
-
-		// Copy vertex data into the mapped memory
-		memcpy(data, vertices.data(), size);
-
-		// unmap buffer
-		vkUnmapMemory(*dev, stagingBufferMemory);
-
-		// create vertex buffer
-		Application::get()->createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, buffer, memory);
-
-		// local so can't use map., so have to copy data between buffers.
-		Application::get()->copyBuffer(stagingBuffer, buffer, bufferSize);
-
-		// clean up staging buffer
-		vkDestroyBuffer(*dev, stagingBuffer, nullptr);
-		vkFreeMemory(*dev, stagingBufferMemory, nullptr);
-	}
-};
-
-struct IndexBO : BufferObject
-{
-	std::vector<uint16_t> indices;
-
-	void createBuffer()
-	{
-
-		// buffersize is the number of incides times the size of the index type (unit32/16)
-		VkDeviceSize bufferSize = sizeof(indices[0]) * indices.size();
-		size = indices.size();
-
-		VkBuffer stagingBuffer;
-		VkDeviceMemory stagingBufferMemory;
-		Application::get()->createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
-
-		void* data;
-		vkMapMemory(*dev, stagingBufferMemory, 0, bufferSize, 0, &data);
-		memcpy(data, indices.data(), (size_t)bufferSize);
-		vkUnmapMemory(*dev, stagingBufferMemory);
-
-		// note usage is INDEX buffer. 
-		Application::get()->createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, buffer, memory);
-
-		Application::get()->copyBuffer(stagingBuffer, buffer, bufferSize);
-		 
-		vkDestroyBuffer(*dev, stagingBuffer, nullptr);
-		vkFreeMemory(*dev, stagingBufferMemory, nullptr);
-	}
-};
-
-struct InstanceBO : BufferObject
-{
-	std::vector<particle> particles;
-	void createBuffer()
-	{
-
-		// buffersize is the number of incides times the size of the index type (unit32/16)
-		VkDeviceSize bufferSize = sizeof(particles[0]) * particles.size();
-		size = particles.size();
-
-		VkBuffer stagingBuffer;
-		VkDeviceMemory stagingBufferMemory;
-		Application::get()->createBuffer(bufferSize,
-			VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-			stagingBuffer,
-			stagingBufferMemory);
-
-		void* data; 
-		vkMapMemory(*dev, stagingBufferMemory, 0, bufferSize, 0, &data);
-		memcpy(data, particles.data(), (size_t)bufferSize);
-		vkUnmapMemory(*dev, stagingBufferMemory);
-
-		// note usage is INDEX buffer. and storage for compute
-		Application::get()->createBuffer(bufferSize,
-			VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-			//  for getting data back VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
-			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-			buffer,
-			memory); 
-
-		Application::get()->copyBuffer(stagingBuffer, buffer, bufferSize);
-
-		vkDestroyBuffer(*dev, stagingBuffer, nullptr);
-		vkFreeMemory(*dev, stagingBufferMemory, nullptr);
-	}
-
-	static VkVertexInputBindingDescription getBindingDescription()
-	{
-		VkVertexInputBindingDescription vInputBindDescription{};
-		vInputBindDescription.binding = 1;   // bind this to 1 (vertex is 0)
-		vInputBindDescription.stride = sizeof(particle);
-		vInputBindDescription.inputRate = VK_VERTEX_INPUT_RATE_INSTANCE;
-		return vInputBindDescription;
-	}
-
-	static std::array<VkVertexInputAttributeDescription, 2> getAttributeDescription()
-	{ 
-		// 1 attributes (position)
-		std::array<VkVertexInputAttributeDescription, 2> attributeDesc;
-
-		attributeDesc[0].binding = 1; // which binding (the only one created above)
-		attributeDesc[0].location = 3; // which location of the vertex shader
-		attributeDesc[0].format = VK_FORMAT_R32G32B32_SFLOAT; // format as a vector 3 (3floats)
-		attributeDesc[0].offset = offsetof(particle, pos); // calculate the offset within each Vertex
-
-
-		// Location 2 : Velocity
-		attributeDesc[1].binding = 1; // which binding (the only one created above)
-		attributeDesc[1].location = 4; // which location of the vertex shader
-		attributeDesc[1].format = VK_FORMAT_R32G32B32_SFLOAT; // format as a vector 3 (3floats)
-		attributeDesc[1].offset = offsetof(particle, vel); // calculate the offset within each Vertex
-
-		return attributeDesc;
 	}
 };

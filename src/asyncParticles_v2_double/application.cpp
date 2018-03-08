@@ -9,6 +9,8 @@
 
 // Custom define for better code readability
 #define VK_FLAGS_NONE 0
+#define AMD
+
 
 
 void Application::initWindow()
@@ -73,16 +75,17 @@ void Application::mainLoop()
 {
 	while (!glfwWindowShouldClose(window))
 	{
-		glfwPollEvents();
+
 
 		// start timer
 		auto startTime = std::chrono::high_resolution_clock::now();
-		 
-
-		 
+		 		 
 		//updateUniformBuffer();   // update
 		drawFrame();			 // render
 		//updateCompute();		 // update 
+
+		glfwSwapBuffers(window);
+
 
 		waitOnFence(compute.fence);
 
@@ -101,6 +104,8 @@ void Application::mainLoop()
 			fpsTimer = 0.0f;
 			frameCounter = 0;
 		}
+
+		glfwPollEvents();
 	}
 
 	vkDeviceWaitIdle(device);
@@ -1399,10 +1404,6 @@ void Application::drawFrame()
 	// get image from swapchain, execute command buffer with that image in the framebuffer, return the image to the swap chain for presentation
 	draw();
 
-	// Wait for finished rendering.
-	//if (!async)
-	//	waitOnFence(graphicsFence);
-
 	updateUniformBuffer();
 	updateCompute();
 
@@ -1414,26 +1415,10 @@ void Application::drawFrame()
 
 	if(vkQueueSubmit(compute.queue, 1, &computeSubmitInfo, compute.fence) != VK_SUCCESS)
 		throw std::runtime_error("failed to submit compute queue");
-	
 
-
-	//if async
 	waitOnFence(graphicsFence);
 
 	bufferIndex = 1 - bufferIndex;
-
-	// Submit compute commands
-	//vkWaitForFences(device, 1, &compute.fence, VK_TRUE, UINT64_MAX);
-	//vkResetFences(device, 1, &compute.fence);
-
-	//VkSubmitInfo computeSubmitInfo{};
-	//computeSubmitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-	//computeSubmitInfo.commandBufferCount = 1;
-	//computeSubmitInfo.pCommandBuffers = &compute.commandBuffer;
-
-	//if(vkQueueSubmit(compute.queue, 1, &computeSubmitInfo, compute.fence) != VK_SUCCESS)
-	//	throw std::runtime_error("failed to submit compute queue");
-
 
 }
 
