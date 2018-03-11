@@ -46,7 +46,7 @@ void nbody::prepareParticles()
 	}
 }
 
-void nbody::run()
+void nbody::run(const MODE chosenMode, const uint32_t totalTime = 120)
 {
 	// loop here  
 	prepareParticles();     

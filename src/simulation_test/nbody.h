@@ -8,6 +8,13 @@
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 
+enum MODE
+{
+	COMPUTE,
+	TRANSFER,
+	DOUBLE
+};
+
 class nbody
 {
 
@@ -32,7 +39,7 @@ public:
 	
 	void prepareParticles();
 
-	void run();
+	void run(const MODE chosenMode, const uint32_t totalTime = 120); // default 2 mins
 
 
 	unsigned int num_particles = 0;

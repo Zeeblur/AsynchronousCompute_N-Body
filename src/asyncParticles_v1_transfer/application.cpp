@@ -9,7 +9,7 @@
 
 // Custom define for better code readability
 #define VK_FLAGS_NONE 0
-#define AMD
+//#define AMD
 
 void Application::initWindow()
 {
@@ -1331,8 +1331,10 @@ void Application::draw()
 	submitInfo.signalSemaphoreCount = 1;
 	submitInfo.pSignalSemaphores = signalSemaphores;
 
+	auto errorcode = vkQueueSubmit(graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
+
 	// submit to queue with signal info. // last param is a fence but we're using semaphores
-	if (vkQueueSubmit(graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE) != VK_SUCCESS)
+	if (errorcode != VK_SUCCESS)
 		throw std::runtime_error("failed to submit draw command buffer!");
 
 
