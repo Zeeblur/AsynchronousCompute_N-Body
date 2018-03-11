@@ -8,7 +8,7 @@
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 
-enum MODE
+extern enum MODE
 {
 	COMPUTE,
 	TRANSFER,
@@ -21,7 +21,7 @@ class nbody
 	const int WIDTH = 800;
 	const int HEIGHT = 600;
 
-	void initialiseVulkan();
+	void initialiseVulkan(const bool AMD);
 
 	std::vector<particle> particleBuffer;
 	std::vector<Vertex> vertexBuffer;
@@ -32,8 +32,7 @@ class nbody
 
 public:
 
-	// default num particles is 4
-	nbody(const unsigned int num = 4);
+	nbody(const unsigned int num, const bool AMD);
 
 	~nbody();
 	

@@ -11,7 +11,6 @@
 // Custom define for better code readability
 #define VK_FLAGS_NONE 0
 
-
 void Renderer::initWindow()
 {
 	glfwInit();
@@ -25,12 +24,12 @@ void Renderer::initWindow()
 	glfwSetWindowSizeCallback(window, Renderer::onWindowResized);
 } 
 
-void Renderer::initVulkan()
+void Renderer::initVulkan(const bool AMD)
 {
 	createInstance();
 	setupDebugCallback();
 	createSurface();
-	pickPhysicalDevice();
+	pickPhysicalDevice(AMD);
 	createLogicalDevice();
 	createSwapChain();
 	createImageViews();
@@ -54,7 +53,7 @@ void Renderer::initVulkan()
 	}
 }
 
-void Renderer::createConfig(int pCount)
+void Renderer::createConfig(const MODE chosenMode, const int pCount)
 {
 	PARTICLE_COUNT = pCount;
 	createVertexBuffer();
@@ -63,6 +62,8 @@ void Renderer::createConfig(int pCount)
 	createUniformBuffer();
 	createDescriptorPool();
 	createDescriptorSet();
+
+
 	createCommandBuffers(); 
 	createSemaphores();
 
@@ -78,12 +79,7 @@ void Renderer::mainLoop()
 		// start timer
 		auto startTime = std::chrono::high_resolution_clock::now();
 
-
-
-		updateUniformBuffer();   // update
-		drawFrame();			 // render
-		dispatchCompute();
-		updateCompute();		 // update 
+		simulation->frame();
 
 		frameCounter++;
 		auto endTime = std::chrono::high_resolution_clock::now();
@@ -147,22 +143,14 @@ void Renderer::cleanup()
 	vkFreeMemory(device, uniformBufferMemory, nullptr);
 
 
+	// rememebr to call cleanup on compute
+
 	// destroy buffers
 	for (auto &b : buffers)
 	{
 		vkDestroyBuffer(device, b->buffer, nullptr);
 		vkFreeMemory(device, b->memory, nullptr);
 	}
-
-	// compute clean up
-	vkDestroyFence(device, compute.fence, nullptr);
-	vkDestroyPipelineLayout(device, compute.pipelineLayout, nullptr);
-	vkDestroyDescriptorSetLayout(device, compute.descriptorSetLayout, nullptr);
-	vkDestroyPipeline(device, compute.pipeline, nullptr);
-	vkFreeCommandBuffers(device, compute.commandPool, static_cast<uint32_t>(1), &compute.commandBuffer);
-	vkDestroyCommandPool(device, compute.commandPool, nullptr);
-	vkDestroyBuffer(device, compute.uniformBuffer, nullptr);
-	vkFreeMemory(device, compute.uboMem, nullptr);
 
 	vkDestroySemaphore(device, renderFinishedSemaphore, nullptr);
 	vkDestroySemaphore(device, imageAvailableSemaphore, nullptr);
@@ -265,7 +253,7 @@ void Renderer::createSurface()
 }
 
 // select GPU that supports the features needed
-void Renderer::pickPhysicalDevice()
+void Renderer::pickPhysicalDevice(const bool AMD)
 {
 	// find devices and store in vector
 	uint32_t deviceCount = 0;
@@ -283,7 +271,7 @@ void Renderer::pickPhysicalDevice()
 	{
 		std::cout << "checking device" << std::endl;
 
-		if (isDeviceSuitable(dev)) 
+		if (isDeviceSuitable(dev, AMD)) 
 		{
 			physicalDevice = dev;
 			break;
@@ -365,9 +353,9 @@ void Renderer::createLogicalDevice()
 
 	vkGetDeviceQueue(device, indices.graphicsFamily, 0, &graphicsQueue);
 	vkGetDeviceQueue(device, indices.presentFamily, (indices.graphicsFamily == indices.computeFamily) ? 1 : 0, &presentQueue);
-	vkGetDeviceQueue(device, indices.computeFamily, 0, &compute.queue);
+	vkGetDeviceQueue(device, indices.computeFamily, 0, &compute->queue);
 	std::cout << "Graphics queue: " << graphicsQueue << std::endl;
-	std::cout << "Compute queue: " << compute.queue << std::endl;
+	std::cout << "Compute queue: " << compute->queue << std::endl;
 	
 }
 
@@ -1317,36 +1305,7 @@ void Renderer::drawFrame()
 
 }
 
-void Renderer::dispatchCompute()
-{
-	// wait until presentation is finished before drawing the next frame
-	vkQueueWaitIdle(presentQueue);  
 
-	auto fenceResult = vkWaitForFences(device, 1, &compute.fence, VK_TRUE, UINT64_MAX);
-	// Submit compute commands
-	while (fenceResult != VK_SUCCESS)
-	{
-		if (fenceResult == VK_ERROR_DEVICE_LOST)
-			throw std::runtime_error("device crashed");
-
-		fenceResult = vkWaitForFences(device, 1, &compute.fence, VK_TRUE, UINT64_MAX);
-	};
-
-	vkResetFences(device, 1, &compute.fence);
-	VkSubmitInfo computeSubmitInfo{};
-	computeSubmitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-	computeSubmitInfo.commandBufferCount = 1;
-	computeSubmitInfo.pCommandBuffers = &compute.commandBuffer;
-
-	auto re = vkQueueSubmit(compute.queue, 1, &computeSubmitInfo, compute.fence);
-	if (re != VK_SUCCESS)
-	{
-		std::cout << "result: " << re << std::endl;
-		throw std::runtime_error("failed to submit compute queue");
-	}
-
-
-}
 
 void Renderer::createTextureImage()
 {
@@ -1555,7 +1514,7 @@ std::vector<const char*> Renderer::getExtensions()
 }
 
 // check for device capability
-bool Renderer::isDeviceSuitable(VkPhysicalDevice device)
+bool Renderer::isDeviceSuitable(VkPhysicalDevice device, const bool AMD)
 {
 	// check for physical properties
 	VkPhysicalDeviceProperties deviceProperties;
@@ -1563,16 +1522,17 @@ bool Renderer::isDeviceSuitable(VkPhysicalDevice device)
 	vkGetPhysicalDeviceProperties(device, &deviceProperties);
 	vkGetPhysicalDeviceFeatures(device, &deviceFeatures);
 
-// Don't choose 1080
-#ifdef AMD
-	char *output = NULL;
-	output = strstr(deviceProperties.deviceName, "GTX");
-	if (output)
+	// Don't choose 1080
+	if (AMD)
 	{
-		printf("1080 Found");
-		return false;
+		char *output = NULL;
+		output = strstr(deviceProperties.deviceName, "GTX");
+		if (output)
+		{
+			printf("1080 Found");
+			return false;
+		}
 	}
-#endif // AMD
 
 	// is this a discrete gpu and does it have geom capabilities 
 	bool physical = deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU &&
@@ -1834,7 +1794,7 @@ int Renderer::findComputeQueueFamily(VkPhysicalDevice pd)
 	std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
 	vkGetPhysicalDeviceQueueFamilyProperties(pd, &queueFamilyCount, queueFamilies.data());
 
-	// find suitable family that supports compute.
+	// find suitable family that supports compute->
 	unsigned int i = 0;
 	for (const auto& queueFamily : queueFamilies)
 	{
@@ -1857,7 +1817,7 @@ void Renderer::buildComputeCommandBuffer()
 	VkCommandBufferBeginInfo cmdBufInfo{};
 	cmdBufInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 
-	if (vkBeginCommandBuffer(compute.commandBuffer, &cmdBufInfo) != VK_SUCCESS)
+	if (vkBeginCommandBuffer(compute->commandBuffer, &cmdBufInfo) != VK_SUCCESS)
 		throw std::runtime_error("Failed to create compute command buffer");
 
 	// Compute particle movement
@@ -1877,7 +1837,7 @@ void Renderer::buildComputeCommandBuffer()
 	bufferBarrier.dstQueueFamilyIndex = queueFamilyIndices.compute;			// Required as compute and graphics queue may have different families
 
 	vkCmdPipelineBarrier(
-		compute.commandBuffer,
+		compute->commandBuffer,
 		VK_PIPELINE_STAGE_VERTEX_SHADER_BIT,
 		VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
 		VK_FLAGS_NONE,
@@ -1885,11 +1845,11 @@ void Renderer::buildComputeCommandBuffer()
 		1, &bufferBarrier,
 		0, nullptr);
 
-	vkCmdBindPipeline(compute.commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, compute.pipeline);
-	vkCmdBindDescriptorSets(compute.commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, compute.pipelineLayout, 0, 1, &compute.descriptorSet, 0, 0);
+	vkCmdBindPipeline(compute->commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, compute->pipeline);
+	vkCmdBindDescriptorSets(compute->commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, compute->pipelineLayout, 0, 1, &compute->descriptorSet, 0, 0);
 
 	// Dispatch the compute     
-	vkCmdDispatch(compute.commandBuffer, PARTICLE_COUNT, 1, 1);
+	vkCmdDispatch(compute->commandBuffer, PARTICLE_COUNT, 1, 1);
 
 	// Add memory barrier to ensure that compute shader has finished writing to the buffer
 	// Without this the (rendering) vertex shader may display incomplete results (partial data from last frame) 
@@ -1903,7 +1863,7 @@ void Renderer::buildComputeCommandBuffer()
 	bufferBarrier.dstQueueFamilyIndex = queueFamilyIndices.graphics;			// Required as compute and graphics queue may have different families
 
 	vkCmdPipelineBarrier(
-		compute.commandBuffer,
+		compute->commandBuffer,
 		VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
 		VK_PIPELINE_STAGE_VERTEX_SHADER_BIT,
 		VK_FLAGS_NONE,
@@ -1911,7 +1871,7 @@ void Renderer::buildComputeCommandBuffer()
 		1, &bufferBarrier,
 		0, nullptr);
 
-	vkEndCommandBuffer(compute.commandBuffer);
+	vkEndCommandBuffer(compute->commandBuffer);
 
 
 
@@ -1923,14 +1883,14 @@ void Renderer::buildComputeCommandBuffer()
 
 void Renderer::createComputeUBO()
 {
-	compute.ubo.particleCount = PARTICLE_COUNT;
-	compute.ubo.deltaT = 0.016f;
-	compute.ubo.destX = 0.5f;
-	compute.ubo.destY = 0.0f;
+	compute->ubo.particleCount = PARTICLE_COUNT;
+	compute->ubo.deltaT = 0.016f;
+	compute->ubo.destX = 0.5f;
+	compute->ubo.destY = 0.0f;
 
 	VkDeviceSize bufferSize = sizeof(ComputeConfig::computeUBO);
 	createBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-		compute.uniformBuffer, compute.uboMem);  // buffer pointer and memory
+		compute->uniformBuffer, compute->uboMem);  // buffer pointer and memory
 }
 
 void Renderer::prepareCompute()
@@ -1941,7 +1901,7 @@ void Renderer::prepareCompute()
 	int queueIndex = findComputeQueueFamily(physicalDevice);
 	// store value
 	queueFamilyIndices.compute = queueIndex;
-	vkGetDeviceQueue(device, queueIndex, 0, &compute.queue);
+	vkGetDeviceQueue(device, queueIndex, 0, &compute->queue);
 
 	// create compute pipeline
 	// Compute pipelines are created separate from graphics pipelines even if they use the same queue (family index)
@@ -1973,31 +1933,31 @@ void Renderer::prepareCompute()
 	descriptorLayout.bindingCount = static_cast<uint32_t>(setLayoutBindings.size());
 
 	// create descriptor layout
-	if(vkCreateDescriptorSetLayout(device, &descriptorLayout, nullptr, &compute.descriptorSetLayout) != VK_SUCCESS)
+	if(vkCreateDescriptorSetLayout(device, &descriptorLayout, nullptr, &compute->descriptorSetLayout) != VK_SUCCESS)
 		throw std::runtime_error("Failed to create compute desc layout");
 
 	// create pipeline layout 
 	VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo{};
 	pipelineLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 	pipelineLayoutCreateInfo.setLayoutCount = 1;
-	pipelineLayoutCreateInfo.pSetLayouts = &compute.descriptorSetLayout;
+	pipelineLayoutCreateInfo.pSetLayouts = &compute->descriptorSetLayout;
 
-	if(vkCreatePipelineLayout(device, &pipelineLayoutCreateInfo, nullptr, &compute.pipelineLayout) != VK_SUCCESS)
+	if(vkCreatePipelineLayout(device, &pipelineLayoutCreateInfo, nullptr, &compute->pipelineLayout) != VK_SUCCESS)
 		throw std::runtime_error("Failed to create compute pipeline");
 
 	// allocate descriptor set info
 	VkDescriptorSetAllocateInfo allocInfo{};
 	allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
 	allocInfo.descriptorPool = descriptorPool;
-	allocInfo.pSetLayouts = &compute.descriptorSetLayout;
+	allocInfo.pSetLayouts = &compute->descriptorSetLayout;
 	allocInfo.descriptorSetCount = 1; 
 	 
 	// create allocation
-	if(vkAllocateDescriptorSets(device, &allocInfo, &compute.descriptorSet) != VK_SUCCESS)
+	if(vkAllocateDescriptorSets(device, &allocInfo, &compute->descriptorSet) != VK_SUCCESS)
 		throw std::runtime_error("Failed to allocate descriptor set for compute");
 
 	// create buffers.
-	//compute.storageBuffer = buffers[INSTANCE];
+	//compute->storageBuffer = buffers[INSTANCE];
 
 	VkDescriptorBufferInfo bufferInfo = {};
 	bufferInfo.buffer = buffers[INSTANCE]->buffer;
@@ -2006,14 +1966,14 @@ void Renderer::prepareCompute()
 
 
 	VkDescriptorBufferInfo UBI = {};
-	UBI.buffer = compute.uniformBuffer;
+	UBI.buffer = compute->uniformBuffer;
 	UBI.offset = 0;
 	UBI.range = sizeof(ComputeConfig::computeUBO);
 
 	// Binding 0 : Particle position storage buffer
 	VkWriteDescriptorSet storageDesc{};
 	storageDesc.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-	storageDesc.dstSet = compute.descriptorSet;
+	storageDesc.dstSet = compute->descriptorSet;
 	storageDesc.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
 	storageDesc.dstBinding = 0;
 	storageDesc.pBufferInfo = &bufferInfo;
@@ -2022,7 +1982,7 @@ void Renderer::prepareCompute()
 	// Binding 1 : Uniform buffer
 	VkWriteDescriptorSet uniformDesc{};
 	uniformDesc.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET; 
-	uniformDesc.dstSet = compute.descriptorSet;
+	uniformDesc.dstSet = compute->descriptorSet;
 	uniformDesc.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 	uniformDesc.dstBinding = 1;
 	uniformDesc.pBufferInfo = &UBI;
@@ -2052,12 +2012,12 @@ void Renderer::prepareCompute()
 	// create info for pipeline setting shader
 	VkComputePipelineCreateInfo computePipelineCreateInfo{};
 	computePipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
-	computePipelineCreateInfo.layout = compute.pipelineLayout;
+	computePipelineCreateInfo.layout = compute->pipelineLayout;
 	computePipelineCreateInfo.flags = 0;
 	computePipelineCreateInfo.stage = compShaderStageInfo;
 	
 	// create it
-	if(vkCreateComputePipelines(device, pipeCache, 1, &computePipelineCreateInfo, nullptr, &compute.pipeline) != VK_SUCCESS)
+	if(vkCreateComputePipelines(device, pipeCache, 1, &computePipelineCreateInfo, nullptr, &compute->pipeline) != VK_SUCCESS)
 		throw std::runtime_error("failed creating compute pipeline");
 
 	// Separate command pool as queue family for compute may be different than graphics
@@ -2065,23 +2025,23 @@ void Renderer::prepareCompute()
 	cmdPoolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
 	cmdPoolInfo.queueFamilyIndex = queueFamilyIndices.compute;
 	cmdPoolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-	if(vkCreateCommandPool(device, &cmdPoolInfo, nullptr, &compute.commandPool) != VK_SUCCESS)
+	if(vkCreateCommandPool(device, &cmdPoolInfo, nullptr, &compute->commandPool) != VK_SUCCESS)
 		throw std::runtime_error("Failed creating compute cmd pool");
 
 	// Create a command buffer for compute operations
 	VkCommandBufferAllocateInfo cmdBufAllocateInfo{};
 	cmdBufAllocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-	cmdBufAllocateInfo.commandPool = compute.commandPool;
+	cmdBufAllocateInfo.commandPool = compute->commandPool;
 	cmdBufAllocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
 	cmdBufAllocateInfo.commandBufferCount = 1;
-	if(vkAllocateCommandBuffers(device, &cmdBufAllocateInfo, &compute.commandBuffer) != VK_SUCCESS)
+	if(vkAllocateCommandBuffers(device, &cmdBufAllocateInfo, &compute->commandBuffer) != VK_SUCCESS)
 		throw std::runtime_error("Failed allocating buffer for compute commands");
 
 	// Fence for compute CB sync
 	VkFenceCreateInfo fenceCreateInfo{};
 	fenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
 	fenceCreateInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
-	if(vkCreateFence(device, &fenceCreateInfo, nullptr, &compute.fence) != VK_SUCCESS)
+	if(vkCreateFence(device, &fenceCreateInfo, nullptr, &compute->fence) != VK_SUCCESS)
 		throw std::runtime_error("Failed creating compute fence");
 
 
@@ -2098,12 +2058,12 @@ void Renderer::updateCompute()
 	float frameTime = std::chrono::duration_cast<std::chrono::milliseconds>(newTime - currentTime).count(); 
 	currentTime = newTime;  
 	 
-	compute.ubo.deltaT = (frameTimer);
-	compute.ubo.destX = 0.75f; 
-	compute.ubo.destY = 0.0f;
-	vkMapMemory(device, compute.uboMem, 0, sizeof(compute.ubo), 0, &compute.mapped);
-	memcpy(compute.mapped, &compute.ubo, sizeof(compute.ubo));
-	vkUnmapMemory(device, compute.uboMem);
+	compute->ubo.deltaT = (frameTimer);
+	compute->ubo.destX = 0.75f; 
+	compute->ubo.destY = 0.0f;
+	vkMapMemory(device, compute->uboMem, 0, sizeof(compute->ubo), 0, &compute->mapped);
+	memcpy(compute->mapped, &compute->ubo, sizeof(compute->ubo));
+	vkUnmapMemory(device, compute->uboMem);
  
 }
 

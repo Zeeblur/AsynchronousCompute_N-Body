@@ -16,10 +16,13 @@
 #include "particle.h"
 #include "buffer.h"
 #include <chrono>
+#include "simulation.h"
+#include "compute.h"
 
 using namespace std::chrono;
 
 struct Vertex;
+enum MODE;
 
 // if debugging - do INSTANCE validation layers
 #ifdef NDEBUG
@@ -107,36 +110,7 @@ private:
 	time_point<system_clock> currentTime;
 	VkPipelineCache pipeCache;
 
-	struct ComputeConfig
-	{
-		BufferObject* storageBuffer;					// (Shader) storage buffer object containing the particles
-		VkBuffer uniformBuffer;		    // Uniform buffer object containing particle system parameters
-		VkQueue queue;								// Separate queue for compute commands (queue family may differ from the one used for graphics)
-		VkCommandPool commandPool;					// Use a separate command pool (queue family may differ from the one used for graphics)
-		VkCommandBuffer commandBuffer;				// Command buffer storing the dispatch commands and barriers
-		VkFence fence;								// Synchronization fence to avoid rewriting compute CB if still in use
-		VkDescriptorSetLayout descriptorSetLayout;	// Compute shader binding layout
-		VkDescriptorSet descriptorSet;				// Compute shader bindings
-		VkPipelineLayout pipelineLayout;			// Layout of the compute pipeline
-		VkPipeline pipeline;						// Compute pipeline for updating particle positions
-
-
-
-		// memory for ubo
-		VkDeviceMemory uboMem;
-		void* mapped = nullptr;
-													// Compute shader uniform block object
-		struct computeUBO
-		{
-			float deltaT;							//		Frame delta time
-			float destX;							//		x position of the attractor
-			float destY;							//		y position of the attractor
-			int32_t particleCount = 0;
-		} ubo;
-	} compute;
-
 	void createComputeUBO();
-	void updateCompute();
 
 	VkBuffer uniformBuffer;
 	VkDeviceMemory uniformBufferMemory;
@@ -165,7 +139,7 @@ private:
 
 
 	void initWindow();
-	void initVulkan();
+	void initVulkan(const bool AMD);
 
 	void cleanup();
 	void cleanupSwapChain();
@@ -184,7 +158,7 @@ private:
 	void createInstance();
 	void setupDebugCallback();
 	void createSurface();
-	void pickPhysicalDevice();
+	void pickPhysicalDevice(const bool AMD);
 	void createLogicalDevice();
 	void createSwapChain();
 	void createImageViews();
@@ -221,16 +195,12 @@ private:
 	void buildComputeCommandBuffer();
 	void createSemaphores();
 
-	void drawFrame();
-	void dispatchCompute();
-	void updateUniformBuffer();
-
 	// checks
 	bool checkValidationLayerSupport();
 	std::vector<const char*> Renderer::getExtensions();
 	bool checkDeviceExtensionSupport(VkPhysicalDevice device);
 
-	bool isDeviceSuitable(VkPhysicalDevice device);
+	bool isDeviceSuitable(VkPhysicalDevice device, const bool AMD);
 	bool hasStencilComponent(VkFormat format);
 
 	uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
@@ -280,22 +250,25 @@ private:
 
 public:
 
+	simulation* simulation;
+	ComputeConfig* compute;
+
 	inline static std::shared_ptr<Renderer> get()
 	{
 		static std::shared_ptr<Renderer> instance(new Renderer());
 		return instance;
 	}
 
-	void init()
+	void init(const bool AMD)
 	{
 		initWindow();
-		initVulkan();
+		initVulkan(AMD);
 	}
 
 	void mainLoop();
 
 	void setVertexData(const std::vector<Vertex> vert, const std::vector<uint16_t> ind, const std::vector<particle> part);
-	void createConfig(int pCount);
+	void createConfig(const MODE chosenMode, const int pCount);
 	int PARTICLE_COUNT = 0;
 
 	// buffer creation & copy functions
@@ -305,6 +278,10 @@ public:
 	// command queue for recording & submitting copies
 	VkCommandBuffer beginSingleTimeCommands();
 	void endSingleTimeCommands(VkCommandBuffer commandBuffer);
+
+	void drawFrame();
+	void updateCompute();
+	void updateUniformBuffer();
 
 	void clean()
 	{
