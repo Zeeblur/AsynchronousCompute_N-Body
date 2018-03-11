@@ -2,19 +2,14 @@
 
 using namespace glm;
 
-nbody::nbody(const unsigned int num, const bool AMD)
+nbody::nbody(const unsigned int num, const bool AMD, const MODE chosenMode)
 {
 	// initialise the Renderer
 	num_particles = num; 
-	initialiseVulkan(AMD);
-}
 
-void nbody::initialiseVulkan(const bool AMD)
-{
+	// initialise vulkan
 	auto &app = Renderer::get();
-
-	app->init(AMD);
-
+	app->init(chosenMode, AMD);
 }
 
 void nbody::prepareParticles()
@@ -45,7 +40,7 @@ void nbody::prepareParticles()
 	}
 }
 
-void nbody::run(const MODE chosenMode, const uint32_t totalTime)
+void nbody::run(const uint32_t totalTime)
 {
 	// loop here  
 	prepareParticles();     
@@ -53,7 +48,7 @@ void nbody::run(const MODE chosenMode, const uint32_t totalTime)
 	Renderer::get()->setVertexData(vertexBuffer, indexBuffer, particleBuffer);
 	// create config sets up the storage buffers for the data and uniforms. 
 	// creates the descriptions and command buffers.
-	Renderer::get()->createConfig(chosenMode, num_particles);
+	Renderer::get()->createConfig(num_particles);
 	Renderer::get()->mainLoop();
 }
 

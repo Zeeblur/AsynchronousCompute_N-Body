@@ -3,14 +3,14 @@
 #include <GLFW/glfw3.h>
 #include "buffer.h"
 #include "compute.h"
+#include <memory>
 
 class Renderer;
 
 class simulation
 {
 protected:
-	Renderer* renderer;
-	ComputeConfig* compute;
+	std::shared_ptr<Renderer> renderer;
 
 	// command buffers();
 	virtual void createCommandBuffers() = 0;
@@ -23,19 +23,22 @@ protected:
 	const VkQueue& graphicsQueue;
 	const VkDevice& device;
 
-	simulation(const VkQueue* pQ, const VkQueue* gQ, const VkDevice* dev)
-		: presentQueue(*pQ), graphicsQueue(*gQ), device(*dev)
-	{	}
+
 
 	virtual ~simulation() = 0;
 
 public:
 		
+	simulation(const VkQueue* pQ, const VkQueue* gQ, const VkDevice* dev)
+		: presentQueue(*pQ), graphicsQueue(*gQ), device(*dev)
+	{	}
+
 	virtual void frame() = 0;
+	ComputeConfig* compute;
 
 };
 
-class comp_simulation : simulation
+class comp_simulation : public simulation
 {
 private:
 	void frame() override;
@@ -47,7 +50,7 @@ public:
 	comp_simulation(const VkQueue* pQ, const VkQueue* gQ, const VkDevice* dev);
 };
 
-class trans_simulation : simulation
+class trans_simulation : public simulation
 {
 private:
 	void frame() override;

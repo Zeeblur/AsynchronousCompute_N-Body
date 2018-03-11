@@ -4,7 +4,7 @@
 
 int main(int argc, const char *argv[])
 {
-	args::ArgumentParser parser("This is a test program.", "This goes after the options.");
+	args::ArgumentParser parser("This is a test program.", "For example: simulation.exe -n -c -p 200");
 	args::HelpFlag help(parser, "help", "Display this help menu", { 'h', "help" });
 	args::Group group(parser, "\nChoose what GPU vendor:", args::Group::Validators::Xor);
 	args::Flag amd(group, "AMD", "Use an AMD GPU", { 'a', "amd" });
@@ -48,22 +48,28 @@ int main(int argc, const char *argv[])
 		return 1;
 	}
 
-	if (particleCount) { std::cout << "particles: " << args::get(particleCount) << std::endl; }
+	int particles = 10; // default
+	if (particleCount)
+	{ 
+		particles = args::get(particleCount);
+		std::cout << "particles: " << args::get(particleCount) << std::endl;
+	}
 	if (stackCount) { std::cout << "stacks: " << args::get(stackCount) << std::endl; }
 	if (sliceCount) { std::cout << "slices: " << args::get(sliceCount) << std::endl; }
 
+	MODE choice = mode1 ? COMPUTE : mode2 ? TRANSFER : DOUBLE;
 
-	//nbody simulation((1<<12)); // maximum in release so far with current res settings
+	nbody simulation(particles, amd, choice); // maximum in release so far with current res settings
 
-	//try
-	//{
-	//	simulation.run();
-	//}
-	//catch (const std::runtime_error& e)
-	//{
-	//	std::cerr << e.what() << std::endl;
-	//	return -1;
-	//}
+	try
+	{
+		simulation.run(0);
+	}
+	catch (const std::runtime_error& e)
+	{
+		std::cerr << e.what() << std::endl;
+		return -1;
+	}
 
 	return 0;
 }

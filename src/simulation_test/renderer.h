@@ -139,7 +139,7 @@ private:
 
 
 	void initWindow();
-	void initVulkan(const bool AMD);
+	void initVulkan(const MODE chosenMode, const bool AMD);
 
 	void cleanup();
 	void cleanupSwapChain();
@@ -250,7 +250,7 @@ private:
 
 public:
 
-	simulation* simulation;
+	simulation* sim;
 	ComputeConfig* compute;
 
 	inline static std::shared_ptr<Renderer> get()
@@ -259,16 +259,16 @@ public:
 		return instance;
 	}
 
-	void init(const bool AMD)
+	void init(const MODE chosenMode, const bool AMD)
 	{
 		initWindow();
-		initVulkan(AMD);
+		initVulkan(chosenMode, AMD);
 	}
 
 	void mainLoop();
 
 	void setVertexData(const std::vector<Vertex> vert, const std::vector<uint16_t> ind, const std::vector<particle> part);
-	void createConfig(const MODE chosenMode, const int pCount);
+	void createConfig(const int pCount);
 	int PARTICLE_COUNT = 0;
 
 	// buffer creation & copy functions

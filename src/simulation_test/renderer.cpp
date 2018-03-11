@@ -24,8 +24,20 @@ void Renderer::initWindow()
 	glfwSetWindowSizeCallback(window, Renderer::onWindowResized);
 } 
 
-void Renderer::initVulkan(const bool AMD)
+void Renderer::initVulkan(const MODE chosenMode, const bool AMD)
 {
+	switch (chosenMode)
+	{
+	case COMPUTE:
+		sim = new comp_simulation(&presentQueue, &graphicsQueue, &device);
+		compute = sim->compute;
+		break;
+	case TRANSFER:
+		break;
+	case DOUBLE:
+		break;
+	}
+
 	createInstance();
 	setupDebugCallback();
 	createSurface();
@@ -53,7 +65,7 @@ void Renderer::initVulkan(const bool AMD)
 	}
 }
 
-void Renderer::createConfig(const MODE chosenMode, const int pCount)
+void Renderer::createConfig(const int pCount)
 {
 	PARTICLE_COUNT = pCount;
 	createVertexBuffer();
@@ -79,7 +91,7 @@ void Renderer::mainLoop()
 		// start timer
 		auto startTime = std::chrono::high_resolution_clock::now();
 
-		simulation->frame();
+		sim->frame();
 
 		frameCounter++;
 		auto endTime = std::chrono::high_resolution_clock::now();

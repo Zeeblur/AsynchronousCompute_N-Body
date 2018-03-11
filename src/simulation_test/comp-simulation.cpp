@@ -1,5 +1,6 @@
 #include "simulation.h"
 #include "renderer.h"
+#include "compute.h"
 
 simulation::~simulation() {}
 
@@ -7,6 +8,8 @@ comp_simulation::comp_simulation(const VkQueue* pQ,
 	const VkQueue* gQ,
 	const VkDevice* dev) : simulation(pQ, gQ, dev)
 {
+	compute = new ComputeConfig();
+	renderer = Renderer::get();
 }
 
 

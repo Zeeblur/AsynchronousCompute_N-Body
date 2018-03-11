@@ -20,9 +20,9 @@ class nbody
 
 	const int WIDTH = 800;
 	const int HEIGHT = 600;
-
+/*
 	void initialiseVulkan(const bool AMD);
-
+*/
 	std::vector<particle> particleBuffer;
 	std::vector<Vertex> vertexBuffer;
 	std::vector<uint16_t> indexBuffer;
@@ -32,13 +32,13 @@ class nbody
 
 public:
 
-	nbody(const unsigned int num, const bool AMD);
+	nbody(const unsigned int num, const bool AMD, const MODE chosenMode);
 
 	~nbody();
 	
 	void prepareParticles();
 
-	void run(const MODE chosenMode, const uint32_t totalTime = 120); // default 2 mins
+	void run(const uint32_t totalTime = 120); // default 2 mins
 
 
 	unsigned int num_particles = 0;
