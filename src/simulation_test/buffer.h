@@ -23,7 +23,7 @@ enum bufferType
 
 struct BufferObject
 {
-	VkDevice* dev;
+	const VkDevice* dev;
 	VkBuffer buffer = VK_NULL_HANDLE;
 	VkDeviceMemory memory = VK_NULL_HANDLE;
 	size_t size = 0;
@@ -48,8 +48,14 @@ struct IndexBO : BufferObject
 
 struct InstanceBO : BufferObject
 {
+	// create another buffer...
+	VkBuffer drawStorageBuffer = VK_NULL_HANDLE;
+	VkDeviceMemory drawMemory = VK_NULL_HANDLE;
+	size_t drawSize = 0;
+
 	std::vector<particle> particles;
 	void createSpecificBuffer();
+	void createDrawStorage();
 
 	static VkVertexInputBindingDescription getBindingDescription();
 

@@ -88,13 +88,46 @@ void InstanceBO::createSpecificBuffer()
 
 	// note usage is INDEX buffer. and storage for compute
 	Renderer::get()->createBuffer(bufferSize,
-		VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+		VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
 		//  for getting data back VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
 		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
 		buffer,
 		memory);
 
 	Renderer::get()->copyBuffer(stagingBuffer, buffer, bufferSize);
+
+	vkDestroyBuffer(*dev, stagingBuffer, nullptr);
+	vkFreeMemory(*dev, stagingBufferMemory, nullptr);
+}
+
+void InstanceBO::createDrawStorage()
+{
+	// buffersize is the number of incides times the size of the index type (unit32/16)
+	VkDeviceSize bufferSize = sizeof(particles[0]) * particles.size();
+	size = particles.size();
+
+	VkBuffer stagingBuffer;
+	VkDeviceMemory stagingBufferMemory;
+	Renderer::get()->createBuffer(bufferSize,
+		VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+		stagingBuffer,
+		stagingBufferMemory);
+
+	void* data;
+	vkMapMemory(*dev, stagingBufferMemory, 0, bufferSize, 0, &data);
+	memcpy(data, particles.data(), (size_t)bufferSize);
+	vkUnmapMemory(*dev, stagingBufferMemory);
+
+	// note usage is INDEX buffer. and storage for compute
+	Renderer::get()->createBuffer(bufferSize,
+		VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+		//  for getting data back VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+		drawStorageBuffer,
+		drawMemory);
+
+	Renderer::get()->copyBuffer(stagingBuffer, drawStorageBuffer, bufferSize);
 
 	vkDestroyBuffer(*dev, stagingBuffer, nullptr);
 	vkFreeMemory(*dev, stagingBufferMemory, nullptr);

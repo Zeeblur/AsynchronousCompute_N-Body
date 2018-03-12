@@ -127,16 +127,7 @@ private:
 	std::vector<VkImage> swapChainImages;
 	std::vector<VkImageView> swapChainImageViews;
 	std::vector<VkFramebuffer> swapChainFramebuffers;
-	std::vector<VkCommandBuffer> commandBuffers;
-
-	// to hold the indicies of the queue families
-	struct
-	{
-		uint32_t graphics;
-		uint32_t compute;
-		uint32_t present;
-	} queueFamilyIndices;
-
+	std::vector<VkCommandBuffer> graphicsCmdBuffers;
 
 	void initWindow();
 	void initVulkan(const MODE chosenMode, const bool AMD);
@@ -182,8 +173,6 @@ private:
 	void createDepthResources();
 	VkFormat findDepthFormat();
 	VkFormat findSupportedFormat(const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features);
-	
-	BufferObject* buffers[3];//  { new VertexBO(), new IndexBO(), new InstanceBO(); };
 
 	void createVertexBuffer();
 	void createIndexBuffer();
@@ -192,7 +181,6 @@ private:
 	void createDescriptorSet();
 
 	void createCommandBuffers();
-	void buildComputeCommandBuffer();
 	void createSemaphores();
 
 	// checks
@@ -266,6 +254,14 @@ public:
 	}
 
 	void mainLoop();
+
+	// to hold the indicies of the queue families
+	struct
+	{
+		uint32_t graphics;
+		uint32_t compute;
+		uint32_t present;
+	} queueFamilyIndices;
 
 	void setVertexData(const std::vector<Vertex> vert, const std::vector<uint16_t> ind, const std::vector<particle> part);
 	void createConfig(const int pCount);

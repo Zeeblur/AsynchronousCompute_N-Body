@@ -30,13 +30,17 @@ void Renderer::initVulkan(const MODE chosenMode, const bool AMD)
 	{
 	case COMPUTE:
 		sim = new comp_simulation(&presentQueue, &graphicsQueue, &device);
-		compute = sim->compute;
 		break;
 	case TRANSFER:
+		sim = new trans_simulation(&presentQueue, &graphicsQueue, &device);
 		break;
 	case DOUBLE:
+		sim = new double_simulation(&presentQueue, &graphicsQueue, &device);
 		break;
 	}
+
+	// set compute config
+	compute = sim->compute;
 
 	createInstance();
 	setupDebugCallback();
@@ -54,23 +58,14 @@ void Renderer::initVulkan(const MODE chosenMode, const bool AMD)
 	createTextureImage();
 	createTextureImageView();
 	createTextureSampler();
-
-	buffers[VERTEX] = new VertexBO();
-	buffers[INDEX] = new IndexBO();
-	buffers[INSTANCE] = new InstanceBO();
-
-	for (auto &b : buffers)
-	{
-		b->dev = &device;
-	}
 }
 
 void Renderer::createConfig(const int pCount)
 {
 	PARTICLE_COUNT = pCount;
-	createVertexBuffer();
-	createIndexBuffer();
-	createInstanceBuffer();
+
+	sim->createBufferObjects();
+
 	createUniformBuffer();
 	createDescriptorPool();
 	createDescriptorSet();
@@ -125,7 +120,7 @@ void Renderer::cleanupSwapChain()
 		vkDestroyFramebuffer(device, swapChainFramebuffers[i], nullptr);
 	}
 
-	vkFreeCommandBuffers(device, gfxCommandPool, static_cast<uint32_t>(commandBuffers.size()), commandBuffers.data());
+	vkFreeCommandBuffers(device, gfxCommandPool, static_cast<uint32_t>(graphicsCmdBuffers.size()), graphicsCmdBuffers.data());
 
 	vkDestroyPipeline(device, graphicsPipeline, nullptr);
 	vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
@@ -158,11 +153,7 @@ void Renderer::cleanup()
 	// rememebr to call cleanup on compute
 
 	// destroy buffers
-	for (auto &b : buffers)
-	{
-		vkDestroyBuffer(device, b->buffer, nullptr);
-		vkFreeMemory(device, b->memory, nullptr);
-	}
+
 
 	vkDestroySemaphore(device, renderFinishedSemaphore, nullptr);
 	vkDestroySemaphore(device, imageAvailableSemaphore, nullptr);
@@ -1037,24 +1028,6 @@ bool Renderer::hasStencilComponent(VkFormat format)
 	return format == VK_FORMAT_D32_SFLOAT_S8_UINT || format == VK_FORMAT_D24_UNORM_S8_UINT;
 }
 
-
-// create vertex buffer objs and index buffers
-void Renderer::createVertexBuffer()
-{
-	buffers[VERTEX]->createSpecificBuffer();
-}
-
-void Renderer::createInstanceBuffer()
-{
-	buffers[INSTANCE]->createSpecificBuffer();
-}
-
-// create index buffer
-void Renderer::createIndexBuffer()
-{
-	buffers[INDEX]->createSpecificBuffer();
-}
-
 // create uniform Buffer
 void Renderer::createUniformBuffer()
 {
@@ -1141,7 +1114,7 @@ void Renderer::createDescriptorSet()
 void Renderer::createCommandBuffers()
 {
 	// resize allocation for frame buffers
-	commandBuffers.resize(swapChainFramebuffers.size());
+	graphicsCmdBuffers.resize(swapChainFramebuffers.size());
 
 	// allocate the buffers
 	VkCommandBufferAllocateInfo allocInfo = {};
@@ -1151,15 +1124,15 @@ void Renderer::createCommandBuffers()
 	// primary can be submitted to a queue for execution but cannot be called from other command buffers
 	// secondary cannot be submitted but can be called from primary buffers
 	allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-	allocInfo.commandBufferCount = (uint32_t)commandBuffers.size();
+	allocInfo.commandBufferCount = (uint32_t)graphicsCmdBuffers.size();
 
-	if (vkAllocateCommandBuffers(device, &allocInfo, commandBuffers.data()) != VK_SUCCESS)
+	if (vkAllocateCommandBuffers(device, &allocInfo, graphicsCmdBuffers.data()) != VK_SUCCESS)
 	{
 		throw std::runtime_error("failed to allocate command buffers!");
 	}
 	 
 	// record into command buffers
-	for (size_t i = 0; i < commandBuffers.size(); i++)
+	for (size_t i = 0; i < graphicsCmdBuffers.size(); i++)
 	{
 		// begin recording command buffer
 		VkCommandBufferBeginInfo beginInfo = {};
@@ -1170,7 +1143,7 @@ void Renderer::createCommandBuffers()
 		beginInfo.pInheritanceInfo = nullptr; // Optional - only relevant for secondary cmd buffers
 
 		// this call resets command buffer as not possible to ammend
-		vkBeginCommandBuffer(commandBuffers[i], &beginInfo);
+		vkBeginCommandBuffer(graphicsCmdBuffers[i], &beginInfo);
 
 		// Start the render pass
 		VkRenderPassBeginInfo renderPassInfo = {};
@@ -1192,33 +1165,33 @@ void Renderer::createCommandBuffers()
 		renderPassInfo.pClearValues = clearValues.data();
 
 		// begin pass - command buffer to record to, the render pass details, how the commands are provided (from 1st/2ndary)
-		vkCmdBeginRenderPass(commandBuffers[i], &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+		vkCmdBeginRenderPass(graphicsCmdBuffers[i], &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
 		// BIND THE PIPELINE
-		vkCmdBindPipeline(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
+		vkCmdBindPipeline(graphicsCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
 	
 		// bind the vbo
-		VkBuffer vertexBuffers[] = { buffers[VERTEX]->buffer };
+		VkBuffer vertexBuffers[] = { sim->buffers[VERTEX]->buffer };
 		VkDeviceSize offsets[] = { 0 };
-		vkCmdBindVertexBuffers(commandBuffers[i], 0, 1, vertexBuffers, offsets); // vbo
+		vkCmdBindVertexBuffers(graphicsCmdBuffers[i], 0, 1, vertexBuffers, offsets); // vbo
 
-		VkBuffer instanceBuffers[] = { buffers[INSTANCE]->buffer };
+		VkBuffer instanceBuffers[] = { sim->buffers[INSTANCE]->buffer };
 
-		vkCmdBindVertexBuffers(commandBuffers[i], 1, 1, instanceBuffers, offsets); // instance
+		vkCmdBindVertexBuffers(graphicsCmdBuffers[i], 1, 1, instanceBuffers, offsets); // instance
 		// bind index & uniforms
-		vkCmdBindIndexBuffer(commandBuffers[i], buffers[INDEX]->buffer, 0, VK_INDEX_TYPE_UINT16);
-		vkCmdBindDescriptorSets(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSet, 0, nullptr);
+		vkCmdBindIndexBuffer(graphicsCmdBuffers[i], sim->buffers[INDEX]->buffer, 0, VK_INDEX_TYPE_UINT16);
+		vkCmdBindDescriptorSets(graphicsCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSet, 0, nullptr);
 
 		// DRAW A TRIANGLEEEEE!!!?"!?!!?!?!?!?!?!
 		// vertex count, instance count, first vertex/ first instance. - used for offsets
-		vkCmdDrawIndexed(commandBuffers[i], static_cast<uint32_t>(buffers[INDEX]->size), static_cast<uint32_t>(buffers[INSTANCE]->size), 0, 0, 0);
+		vkCmdDrawIndexed(graphicsCmdBuffers[i], static_cast<uint32_t>(sim->buffers[INDEX]->size), static_cast<uint32_t>(sim->buffers[INSTANCE]->size), 0, 0, 0);
 		//vkCmdDraw(commandBuffers[i], static_cast<uint32_t>(vertices.size()), 1, 0, 0);
 	 
 		// end the pass
-		vkCmdEndRenderPass(commandBuffers[i]);
+		vkCmdEndRenderPass(graphicsCmdBuffers[i]);
 
 		// check if failed recording
-		if (vkEndCommandBuffer(commandBuffers[i]) != VK_SUCCESS)
+		if (vkEndCommandBuffer(graphicsCmdBuffers[i]) != VK_SUCCESS)
 			throw std::runtime_error("failed to record command buffer!");
 		
 	}
@@ -1273,7 +1246,7 @@ void Renderer::drawFrame()
 
 	// which command buffers to submit for exe - the one that binds the swap chain image we aquired as a colour attachment
 	submitInfo.commandBufferCount = 1;
-	submitInfo.pCommandBuffers = &commandBuffers[imageIndex];
+	submitInfo.pCommandBuffers = &graphicsCmdBuffers[imageIndex];
 
 	// which semaphores to signal once the command buffers have finished execution.
 	VkSemaphore signalSemaphores[] = { renderFinishedSemaphore };
@@ -1787,9 +1760,9 @@ VkExtent2D Renderer::chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabiliti
 void Renderer::setVertexData(const std::vector<Vertex> vert, const std::vector<uint16_t> ind, const std::vector<particle> part)
 {
 	// copy data
-	dynamic_cast<VertexBO*>(buffers[VERTEX])->vertices = vert;
-	dynamic_cast<IndexBO*>(buffers[INDEX])->indices = ind;
-	dynamic_cast<InstanceBO*>(buffers[INSTANCE])->particles = part;
+	dynamic_cast<VertexBO*>(sim->buffers[VERTEX])->vertices = vert;
+	dynamic_cast<IndexBO*>(sim->buffers[INDEX])->indices = ind;
+	dynamic_cast<InstanceBO*>(sim->buffers[INSTANCE])->particles = part;
 
 }
 
@@ -1821,76 +1794,6 @@ int Renderer::findComputeQueueFamily(VkPhysicalDevice pd)
 	}
 
 	return index;
-}
-
-void Renderer::buildComputeCommandBuffer()
-{
-	// create command buffer
-	VkCommandBufferBeginInfo cmdBufInfo{};
-	cmdBufInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-
-	if (vkBeginCommandBuffer(compute->commandBuffer, &cmdBufInfo) != VK_SUCCESS)
-		throw std::runtime_error("Failed to create compute command buffer");
-
-	// Compute particle movement
-
-	// Add memory barrier to ensure that the (graphics) vertex shader has fetched attributes before compute starts to write to the buffer
-	VkBufferMemoryBarrier bufferBarrier{};
-	bufferBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-	bufferBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-	bufferBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-	bufferBarrier.buffer = buffers[INSTANCE]->buffer;
-	//bufferBarrier.size = VK_WHOLE_SIZE;
-	bufferBarrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;						// Vertex shader invocations have finished reading from the buffer
-	bufferBarrier.dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT;								// Compute shader wants to write to the buffer
-																							// Compute and graphics queue may have different queue families (see VulkanDevice::createLogicalDevice)
-																							// For the barrier to work across different queues, we need to set their family indices
-	bufferBarrier.srcQueueFamilyIndex = queueFamilyIndices.graphics;			// Required as compute and graphics queue may have different families
-	bufferBarrier.dstQueueFamilyIndex = queueFamilyIndices.compute;			// Required as compute and graphics queue may have different families
-
-	vkCmdPipelineBarrier(
-		compute->commandBuffer,
-		VK_PIPELINE_STAGE_VERTEX_SHADER_BIT,
-		VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-		VK_FLAGS_NONE,
-		0, nullptr,
-		1, &bufferBarrier,
-		0, nullptr);
-
-	vkCmdBindPipeline(compute->commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, compute->pipeline);
-	vkCmdBindDescriptorSets(compute->commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, compute->pipelineLayout, 0, 1, &compute->descriptorSet, 0, 0);
-
-	// Dispatch the compute     
-	vkCmdDispatch(compute->commandBuffer, PARTICLE_COUNT, 1, 1);
-
-	// Add memory barrier to ensure that compute shader has finished writing to the buffer
-	// Without this the (rendering) vertex shader may display incomplete results (partial data from last frame) 
-	bufferBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;								// Compute shader has finished writes to the buffer
-	bufferBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;						// Vertex shader invocations want to read from the buffer
-	bufferBarrier.buffer = buffers[INSTANCE]->buffer;
-	//bufferBarrier.size = VK_WHOLE_SIZE;
-	// Compute and graphics queue may have different queue families (see VulkanDevice::createLogicalDevice)
-	// For the barrier to work across different queues, we need to set their family indices
-	bufferBarrier.srcQueueFamilyIndex = queueFamilyIndices.compute;			// Required as compute and graphics queue may have different families
-	bufferBarrier.dstQueueFamilyIndex = queueFamilyIndices.graphics;			// Required as compute and graphics queue may have different families
-
-	vkCmdPipelineBarrier(
-		compute->commandBuffer,
-		VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-		VK_PIPELINE_STAGE_VERTEX_SHADER_BIT,
-		VK_FLAGS_NONE,
-		0, nullptr,
-		1, &bufferBarrier,
-		0, nullptr);
-
-	vkEndCommandBuffer(compute->commandBuffer);
-
-
-
-	// get memory back and count
-	//vkMapMemory(device, buffers[INSTANCE]->memory, 0, buffers[INSTANCE]->size * sizeof(particle), 0, &returnParticles);
-
-
 }
 
 void Renderer::createComputeUBO()
@@ -1972,9 +1875,9 @@ void Renderer::prepareCompute()
 	//compute->storageBuffer = buffers[INSTANCE];
 
 	VkDescriptorBufferInfo bufferInfo = {};
-	bufferInfo.buffer = buffers[INSTANCE]->buffer;
+	bufferInfo.buffer = sim->buffers[INSTANCE]->buffer;
 	bufferInfo.offset = 0;
-	bufferInfo.range = sizeof(particle) * buffers[INSTANCE]->size;  //  BUFFER SIZE FOR COMPUTE!
+	bufferInfo.range = sizeof(particle) * sim->buffers[INSTANCE]->size;  //  BUFFER SIZE FOR COMPUTE!
 
 
 	VkDescriptorBufferInfo UBI = {};
@@ -2041,26 +1944,12 @@ void Renderer::prepareCompute()
 		throw std::runtime_error("Failed creating compute cmd pool");
 
 	// Create a command buffer for compute operations
-	VkCommandBufferAllocateInfo cmdBufAllocateInfo{};
-	cmdBufAllocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-	cmdBufAllocateInfo.commandPool = compute->commandPool;
-	cmdBufAllocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-	cmdBufAllocateInfo.commandBufferCount = 1;
-	if(vkAllocateCommandBuffers(device, &cmdBufAllocateInfo, &compute->commandBuffer) != VK_SUCCESS)
-		throw std::runtime_error("Failed allocating buffer for compute commands");
-
-	// Fence for compute CB sync
-	VkFenceCreateInfo fenceCreateInfo{};
-	fenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-	fenceCreateInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
-	if(vkCreateFence(device, &fenceCreateInfo, nullptr, &compute->fence) != VK_SUCCESS)
-		throw std::runtime_error("Failed creating compute fence");
-
+	sim->allocateCommandBuffers();
 
 	vkDestroyShaderModule(device, computeShaderMod, nullptr);
 
 	// Build a single command buffer containing the compute dispatch commands
-	buildComputeCommandBuffer();
+	sim->recordComputeCommands();
 }
 
 void Renderer::updateCompute()
