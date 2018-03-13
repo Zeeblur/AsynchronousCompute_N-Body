@@ -5,12 +5,18 @@
 
 BufferObject::~BufferObject()
 {
-	vkDestroyBuffer(*dev, buffer, nullptr);
-	vkFreeMemory(*dev, memory, nullptr);
+	for (int i = 0; i < buffer.size(); i++)
+	{
+		vkDestroyBuffer(*dev, buffer[i], nullptr);
+		vkFreeMemory(*dev, memory[i], nullptr);
+	}
 }
 
 void VertexBO::createSpecificBuffer()
 {
+	buffer.resize(1);
+	memory.resize(1);
+
 	VkDeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
 	size = (size_t)bufferSize;
 
@@ -31,10 +37,10 @@ void VertexBO::createSpecificBuffer()
 	vkUnmapMemory(*dev, stagingBufferMemory);
 
 	// create vertex buffer
-	Renderer::get()->createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, buffer, memory);
+	Renderer::get()->createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, buffer[bufferIndex], memory[bufferIndex]);
 
 	// local so can't use map., so have to copy data between buffers.
-	Renderer::get()->copyBuffer(stagingBuffer, buffer, bufferSize);
+	Renderer::get()->copyBuffer(stagingBuffer, buffer[bufferIndex], bufferSize);
 
 	// clean up staging buffer
 	vkDestroyBuffer(*dev, stagingBuffer, nullptr);
@@ -43,6 +49,8 @@ void VertexBO::createSpecificBuffer()
 
 void IndexBO::createSpecificBuffer()
 {
+	buffer.resize(1);
+	memory.resize(1);
 
 	// buffersize is the number of incides times the size of the index type (unit32/16)
 	VkDeviceSize bufferSize = sizeof(indices[0]) * indices.size();
@@ -58,9 +66,9 @@ void IndexBO::createSpecificBuffer()
 	vkUnmapMemory(*dev, stagingBufferMemory);
 
 	// note usage is INDEX buffer. 
-	Renderer::get()->createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, buffer, memory);
+	Renderer::get()->createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, buffer[bufferIndex], memory[bufferIndex]);
 
-	Renderer::get()->copyBuffer(stagingBuffer, buffer, bufferSize);
+	Renderer::get()->copyBuffer(stagingBuffer, buffer[bufferIndex], bufferSize);
 
 	vkDestroyBuffer(*dev, stagingBuffer, nullptr);
 	vkFreeMemory(*dev, stagingBufferMemory, nullptr);
@@ -68,6 +76,8 @@ void IndexBO::createSpecificBuffer()
 
 void InstanceBO::createSpecificBuffer()
 {
+	buffer.resize(1);
+	memory.resize(1);
 
 	// buffersize is the number of incides times the size of the index type (unit32/16)
 	VkDeviceSize bufferSize = sizeof(particles[0]) * particles.size();
@@ -91,10 +101,10 @@ void InstanceBO::createSpecificBuffer()
 		VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
 		//  for getting data back VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
 		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-		buffer,
-		memory);
+		buffer[bufferIndex],
+		memory[bufferIndex]);
 
-	Renderer::get()->copyBuffer(stagingBuffer, buffer, bufferSize);
+	Renderer::get()->copyBuffer(stagingBuffer, buffer[bufferIndex], bufferSize);
 
 	vkDestroyBuffer(*dev, stagingBuffer, nullptr);
 	vkFreeMemory(*dev, stagingBufferMemory, nullptr);
@@ -102,6 +112,10 @@ void InstanceBO::createSpecificBuffer()
 
 void InstanceBO::createDrawStorage()
 {
+	// resize vector for additional buffer
+	buffer.resize(2);
+	memory.resize(2);
+
 	// buffersize is the number of incides times the size of the index type (unit32/16)
 	VkDeviceSize bufferSize = sizeof(particles[0]) * particles.size();
 	size = particles.size();
@@ -121,13 +135,13 @@ void InstanceBO::createDrawStorage()
 
 	// note usage is INDEX buffer. and storage for compute
 	Renderer::get()->createBuffer(bufferSize,
-		VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+		VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
 		//  for getting data back VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
 		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-		drawStorageBuffer,
-		drawMemory);
+		buffer[bufferIndex+1],  // +1 for draw storage
+		memory[bufferIndex+1]);
 
-	Renderer::get()->copyBuffer(stagingBuffer, drawStorageBuffer, bufferSize);
+	Renderer::get()->copyBuffer(stagingBuffer, buffer[bufferIndex+1], bufferSize);
 
 	vkDestroyBuffer(*dev, stagingBuffer, nullptr);
 	vkFreeMemory(*dev, stagingBufferMemory, nullptr);

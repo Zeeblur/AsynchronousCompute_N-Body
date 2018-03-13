@@ -98,12 +98,7 @@ private:
 	VkSurfaceKHR surface;
 	VkSwapchainKHR swapChain;
 	VkFormat swapChainImageFormat;
-	VkExtent2D swapChainExtent;
-	VkRenderPass renderPass;
 	VkDescriptorSetLayout descriptorSetLayout;
-	VkPipelineLayout pipelineLayout;
-	VkPipeline graphicsPipeline;
-	VkCommandPool gfxCommandPool;
 	VkSemaphore imageAvailableSemaphore;
 	VkSemaphore renderFinishedSemaphore;
 
@@ -114,8 +109,6 @@ private:
 
 	VkBuffer uniformBuffer;
 	VkDeviceMemory uniformBufferMemory;
-	VkDescriptorPool descriptorPool;
-	VkDescriptorSet descriptorSet;
 	VkImage textureImage;
 	VkDeviceMemory textureImageMemory;
 	VkImageView textureImageView;
@@ -126,8 +119,6 @@ private:
 
 	std::vector<VkImage> swapChainImages;
 	std::vector<VkImageView> swapChainImageViews;
-	std::vector<VkFramebuffer> swapChainFramebuffers;
-	std::vector<VkCommandBuffer> graphicsCmdBuffers;
 
 	void initWindow();
 	void initVulkan(const MODE chosenMode, const bool AMD);
@@ -177,7 +168,6 @@ private:
 	void createVertexBuffer();
 	void createIndexBuffer();
 	void createUniformBuffer();
-	void createDescriptorPool();
 	void createDescriptorSet();
 
 	void createCommandBuffers();
@@ -240,6 +230,19 @@ public:
 
 	simulation* sim;
 	ComputeConfig* compute;
+
+	// vars that simulation needs to access
+	std::vector<VkFramebuffer> swapChainFramebuffers;
+	std::vector<VkCommandBuffer> graphicsCmdBuffers;
+	VkCommandPool gfxCommandPool;
+	VkExtent2D swapChainExtent;
+	VkRenderPass renderPass;
+	VkPipelineLayout pipelineLayout;
+	VkPipeline graphicsPipeline;
+	VkDescriptorSet gfxDescriptorSet;
+	VkFence graphicsFence;
+	VkDescriptorPool descriptorPool;
+
 
 	inline static std::shared_ptr<Renderer> get()
 	{

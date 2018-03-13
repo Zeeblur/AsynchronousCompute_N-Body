@@ -2,8 +2,6 @@
 #include "renderer.h"
 #include "compute.h"
 
-simulation::~simulation() {}
-
 comp_simulation::comp_simulation(const VkQueue* pQ,
 	const VkQueue* gQ,
 	const VkDevice* dev) : simulation(pQ, gQ, dev)
@@ -25,12 +23,13 @@ void comp_simulation::frame()
 {
 	renderer->updateUniformBuffer();   // update
 	renderer->drawFrame();			   // render
-	dispatchCompute();
-	renderer->updateCompute();		 // up
+	dispatchCompute();				   // submit compute
+	renderer->updateCompute();		   // up
 
 }
 
-void comp_simulation::allocateCommandBuffers()
+// compute command buffers
+void comp_simulation::allocateComputeCommandBuffers()
 {
 	VkCommandBufferAllocateInfo cmdBufAllocateInfo{};
 	cmdBufAllocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -64,7 +63,7 @@ void comp_simulation::recordComputeCommands()
 	bufferBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
 	bufferBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 	bufferBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-	bufferBarrier.buffer = buffers[INSTANCE]->buffer;
+	bufferBarrier.buffer = buffers[INSTANCE]->buffer[buffIndex];
 	//bufferBarrier.size = VK_WHOLE_SIZE;
 	bufferBarrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;						// Vertex shader invocations have finished reading from the buffer
 	bufferBarrier.dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT;								// Compute shader wants to write to the buffer
@@ -92,7 +91,7 @@ void comp_simulation::recordComputeCommands()
 	// Without this the (rendering) vertex shader may display incomplete results (partial data from last frame) 
 	bufferBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;								// Compute shader has finished writes to the buffer
 	bufferBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;						// Vertex shader invocations want to read from the buffer
-	bufferBarrier.buffer = buffers[INSTANCE]->buffer;
+	bufferBarrier.buffer = buffers[INSTANCE]->buffer[buffIndex];
 	//bufferBarrier.size = VK_WHOLE_SIZE;
 	// Compute and graphics queue may have different queue families (see VulkanDevice::createLogicalDevice)
 	// For the barrier to work across different queues, we need to set their family indices

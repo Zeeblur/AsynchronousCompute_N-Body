@@ -24,9 +24,10 @@ enum bufferType
 struct BufferObject
 {
 	const VkDevice* dev;
-	VkBuffer buffer = VK_NULL_HANDLE;
-	VkDeviceMemory memory = VK_NULL_HANDLE;
+	std::vector<VkBuffer> buffer;
+	std::vector<VkDeviceMemory> memory;
 	size_t size = 0;
+	int bufferIndex = 0;
 
 	virtual void createSpecificBuffer() = 0;
 
@@ -48,11 +49,6 @@ struct IndexBO : BufferObject
 
 struct InstanceBO : BufferObject
 {
-	// create another buffer...
-	VkBuffer drawStorageBuffer = VK_NULL_HANDLE;
-	VkDeviceMemory drawMemory = VK_NULL_HANDLE;
-	size_t drawSize = 0;
-
 	std::vector<particle> particles;
 	void createSpecificBuffer();
 	void createDrawStorage();

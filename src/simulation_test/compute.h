@@ -46,8 +46,8 @@ struct ComputeConfig
 };
 
 
-struct Async : ComputeConfig
+struct Async : public ComputeConfig
 {
 	VkCommandBuffer commandBuffer[2];			// 2 Command buffer storing the dispatch commands and barriers
-	VkDescriptorSet descriptorSet[2];				// Compute shader bindings (FOR 1 AND 2)!!!!!
+	VkDescriptorSet descriptorSet[2];			// Compute shader bindings (FOR 1 AND 2)!!!!!
 };

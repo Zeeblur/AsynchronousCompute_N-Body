@@ -25,11 +25,13 @@ void trans_simulation::frame()
 {
 	renderer->updateUniformBuffer();   // update
 	computeTransfer();
+	dispatchCompute();
 	renderer->drawFrame();			   // render
 	renderer->updateCompute();		   // update 
 }
 
-void trans_simulation::allocateCommandBuffers()
+// compute & transfer command buffers
+void trans_simulation::allocateComputeCommandBuffers()
 {
 	// Create a command buffer for compute operations
 	VkCommandBufferAllocateInfo cmdBufAllocateInfo{};
@@ -85,10 +87,6 @@ void trans_simulation::recordTransferCommands()
 	VkCommandBufferBeginInfo cmdBufInfo{};
 	cmdBufInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 
-
-	// cast instance buffer so can use draw storage (2nd instance buffer)
-	auto instanceBuffer = dynamic_cast<InstanceBO*>(buffers[INSTANCE]);
-
 	VkBufferMemoryBarrier computeBarrier, drawBarrier;
 	computeBarrier.srcQueueFamilyIndex = 0;
 	computeBarrier.dstQueueFamilyIndex = 0;
@@ -96,8 +94,8 @@ void trans_simulation::recordTransferCommands()
 	computeBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
 	computeBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT;
 	computeBarrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-	computeBarrier.buffer = instanceBuffer->buffer; // comput storgae buffer
-	computeBarrier.size = instanceBuffer->size * sizeof(particle); // desc range
+	computeBarrier.buffer = buffers[INSTANCE]->buffer[buffIndex]; // comput storgae buffer
+	computeBarrier.size = buffers[INSTANCE]->size * sizeof(particle); // desc range
 
 	computeBarrier.pNext = nullptr;
 	drawBarrier.pNext = nullptr;
@@ -109,8 +107,8 @@ void trans_simulation::recordTransferCommands()
 	drawBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
 	drawBarrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
 	drawBarrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-	drawBarrier.buffer = instanceBuffer->drawStorageBuffer;
-	drawBarrier.size = instanceBuffer->size * sizeof(particle);
+	drawBarrier.buffer = buffers[INSTANCE]->buffer[buffIndex+1]; // draw storage buffer
+	drawBarrier.size = buffers[INSTANCE]->size * sizeof(particle);
 
 	// begin writing to transfer cmd buffer
 	// set up pipeline barrier, copy buffer, change barriers, end.
@@ -132,10 +130,10 @@ void trans_simulation::recordTransferCommands()
 
 	// Copy buffers
 	VkBufferCopy copyRegion = {};
-	copyRegion.size = instanceBuffer->size * sizeof(particle);
+	copyRegion.size = buffers[INSTANCE]->size * sizeof(particle);
 	vkCmdCopyBuffer(transferCmdBuffer,
-		instanceBuffer->buffer,
-		instanceBuffer->drawStorageBuffer,
+		buffers[INSTANCE]->buffer[buffIndex],   // copy from storage to draw
+		buffers[INSTANCE]->buffer[buffIndex+1],
 		1,
 		&copyRegion);
 
@@ -187,7 +185,10 @@ void trans_simulation::computeTransfer()
 		VkFence newFence = VK_NULL_HANDLE;
 		compute->fence = newFence;
 	}
+}
 
+void trans_simulation::dispatchCompute()
+{
 	if (!compute->fence)
 	{
 		// create fence
