@@ -21,9 +21,9 @@ void comp_simulation::createBufferObjects()
 
 void comp_simulation::frame()
 {
-	renderer->updateUniformBuffer();   // update
 	renderer->drawFrame();			   // render
 	dispatchCompute();				   // submit compute
+	renderer->updateUniformBuffer();   // update
 	renderer->updateCompute();		   // up
 
 }

@@ -23,10 +23,10 @@ void double_simulation::createBufferObjects()
 
 void double_simulation::frame()
 {
-	renderer->drawFrame();			   // render
-	renderer->updateUniformBuffer();   // update
-	renderer->updateCompute();		   // update								   
+	renderer->drawFrame();			   // render			   
 	dispatchCompute();				   // submit compute
+	renderer->updateUniformBuffer();   // update
+	renderer->updateCompute();		   // update				
 }
 
 void double_simulation::createDescriptorPool()

@@ -9,7 +9,7 @@
 
 // Custom define for better code readability
 #define VK_FLAGS_NONE 0
-//#define AMD
+#define AMD
 
 
 
@@ -1401,8 +1401,7 @@ void Application::draw()
 void Application::drawFrame()
 {
 
-	// get image from swapchain, execute command buffer with that image in the framebuffer, return the image to the swap chain for presentation
-	draw();
+
 
 	updateUniformBuffer();
 	updateCompute();
@@ -1415,6 +1414,9 @@ void Application::drawFrame()
 
 	if(vkQueueSubmit(compute.queue, 1, &computeSubmitInfo, compute.fence) != VK_SUCCESS)
 		throw std::runtime_error("failed to submit compute queue");
+
+	// get image from swapchain, execute command buffer with that image in the framebuffer, return the image to the swap chain for presentation
+	draw();
 
 	waitOnFence(graphicsFence);
 

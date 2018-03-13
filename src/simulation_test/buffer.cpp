@@ -166,7 +166,6 @@ std::array<VkVertexInputAttributeDescription, 2> InstanceBO::getAttributeDescrip
 	attributeDesc[0].format = VK_FORMAT_R32G32B32_SFLOAT; // format as a vector 3 (3floats)
 	attributeDesc[0].offset = offsetof(particle, pos); // calculate the offset within each Vertex
 
-
 													   // Location 2 : Velocity
 	attributeDesc[1].binding = 1; // which binding (the only one created above)
 	attributeDesc[1].location = 4; // which location of the vertex shader
