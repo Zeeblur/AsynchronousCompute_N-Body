@@ -285,8 +285,7 @@ void double_simulation::dispatchCompute()
 	waitOnFence(comp->fence);
 }
 
-
 void double_simulation::cleanup()
 {
-
+	compute->cleanup(device);
 }

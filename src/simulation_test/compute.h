@@ -31,18 +31,7 @@ struct ComputeConfig
 
 	ComputeConfig();
 
-	void cleanup(VkDevice& device)
-	{
-		// compute clean up
-		vkDestroyFence(device, fence, nullptr);
-		vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
-		vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
-		vkDestroyPipeline(device, pipeline, nullptr);
-		vkFreeCommandBuffers(device, commandPool, static_cast<uint32_t>(1), &commandBuffer);
-		vkDestroyCommandPool(device, commandPool, nullptr);
-		vkDestroyBuffer(device, uniformBuffer, nullptr);
-		vkFreeMemory(device, uboMem, nullptr);
-	}
+	virtual void cleanup(const VkDevice& device);
 };
 
 
@@ -50,4 +39,6 @@ struct Async : public ComputeConfig
 {
 	VkCommandBuffer commandBuffer[2];			// 2 Command buffer storing the dispatch commands and barriers
 	VkDescriptorSet descriptorSet[2];			// Compute shader bindings (FOR 1 AND 2)!!!!!
+
+	void cleanup(const VkDevice& device) override;
 };

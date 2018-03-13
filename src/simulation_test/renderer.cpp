@@ -150,9 +150,15 @@ void Renderer::cleanup()
 
 
 	// rememebr to call cleanup on compute
+	sim->cleanup();
 
 	// destroy buffers
-
+	for (auto &b : sim->buffers)
+	{
+		delete b;
+	}
+	
+	vkDestroyFence(device, graphicsFence, nullptr);
 
 	vkDestroySemaphore(device, renderFinishedSemaphore, nullptr);
 	vkDestroySemaphore(device, imageAvailableSemaphore, nullptr);

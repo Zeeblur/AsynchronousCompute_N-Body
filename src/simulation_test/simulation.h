@@ -12,10 +12,6 @@ class simulation
 protected:
 	std::shared_ptr<Renderer> renderer;
 
-	virtual void cleanup() = 0;
-
-	// recording the command buffers?
-
 	// store queues
 	const VkQueue& presentQueue;
 	const VkQueue& graphicsQueue;
@@ -50,6 +46,7 @@ public:
 	virtual void createDescriptorSets();
 	virtual void createBufferObjects() = 0; // vertex instance and index buffer data 
 	virtual void dispatchCompute() = 0;
+	virtual void cleanup() = 0;
 
 	ComputeConfig* compute;
 };
