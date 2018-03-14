@@ -87,6 +87,9 @@ private:
 	void recordTransferCommands();
 
 	VkCommandBuffer transferCmdBuffer;
+	VkQueue transferQueue;
+	VkCommandPool transferPool;
+	int findTransferQueueFamily(VkPhysicalDevice pd);
 public:
 	trans_simulation(const VkQueue* pQ, const VkQueue* gQ, const VkDevice* dev);
 };

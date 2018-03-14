@@ -1139,7 +1139,7 @@ void Renderer::drawFrame()
 
 	if (chosenSimMode == DOUBLE)
 	{
-		submitInfo.pCommandBuffers = &graphicsCmdBuffers[dynamic_cast<double_simulation*>(sim)->bufferIndex];
+		submitInfo.pCommandBuffers = &graphicsCmdBuffers[dynamic_cast<double_simulation*>(sim)->bufferIndex+1];
 	}
 	else
 	{

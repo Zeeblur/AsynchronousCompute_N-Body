@@ -24,17 +24,59 @@ void trans_simulation::createBufferObjects()
 void trans_simulation::frame()
 {
 	renderer->updateUniformBuffer();   // update
-	computeTransfer();
+	renderer->updateCompute();		   // update 
+
+
 	dispatchCompute();
 	renderer->drawFrame();			   // render
-	renderer->updateCompute();		   // update 
+	computeTransfer();
+
+}
+
+int trans_simulation::findTransferQueueFamily(VkPhysicalDevice pd)
+{
+	// find and return the index of compute queue family for device
+
+	int index = -1;
+
+	// as before, find them, set them
+	uint32_t queueFamilyCount = 0;
+	vkGetPhysicalDeviceQueueFamilyProperties(pd, &queueFamilyCount, nullptr);
+
+	std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
+	vkGetPhysicalDeviceQueueFamilyProperties(pd, &queueFamilyCount, queueFamilies.data());
+
+	// find suitable family that supports transfer.
+	unsigned int i = 0;
+	for (const auto& queueFamily : queueFamilies)
+	{
+
+		// check for Transfer support 
+		if (queueFamily.queueCount > 0 && queueFamily.queueFlags & VK_QUEUE_TRANSFER_BIT)
+		{
+			index = i;
+			break;
+		}
+		i++;
+	}
+
+	return index;
 }
 
 void trans_simulation::createCommandPools(QueueFamilyIndices& queueFamilyIndices, VkPhysicalDevice& phys)
 {
 	simulation::createCommandPools(queueFamilyIndices, phys); // call base class
 
-	// create transfer command pool
+	int queueIndex = findTransferQueueFamily(phys);
+	// store value
+	vkGetDeviceQueue(device, queueIndex, 0, &transferQueue);
+
+	VkCommandPoolCreateInfo cmdPoolInfo = {};
+	cmdPoolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+	cmdPoolInfo.queueFamilyIndex = queueIndex;
+	cmdPoolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+	if (vkCreateCommandPool(device, &cmdPoolInfo, nullptr, &transferPool) != VK_SUCCESS)
+		throw std::runtime_error("Failed creating compute cmd pool");
 }
 
 // compute & transfer command buffers
@@ -49,6 +91,8 @@ void trans_simulation::allocateComputeCommandBuffers()
 	if (vkAllocateCommandBuffers(device, &cmdBufAllocateInfo, &compute->commandBuffer) != VK_SUCCESS)
 		throw std::runtime_error("Failed allocating buffer for compute commands");
 	// allocate transfer command buffer
+
+	cmdBufAllocateInfo.commandPool = transferPool;
 	if (vkAllocateCommandBuffers(device, &cmdBufAllocateInfo, &transferCmdBuffer) != VK_SUCCESS)
 		throw std::runtime_error("Failed allocating buffer for transfer commands");
 
@@ -93,6 +137,8 @@ void trans_simulation::recordTransferCommands()
 	// create commandBuffer
 	VkCommandBufferBeginInfo cmdBufInfo{};
 	cmdBufInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+	//cmdBufInfo.flags = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
+
 
 	VkBufferMemoryBarrier computeBarrier, drawBarrier;
 	computeBarrier.srcQueueFamilyIndex = 0;
@@ -114,7 +160,7 @@ void trans_simulation::recordTransferCommands()
 	drawBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
 	drawBarrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
 	drawBarrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-	drawBarrier.buffer = buffers[INSTANCE]->buffer[buffIndex+1]; // draw storage buffer
+	drawBarrier.buffer = buffers[INSTANCE]->buffer[buffIndex + 1]; // draw storage buffer
 	drawBarrier.size = buffers[INSTANCE]->size * sizeof(particle);
 
 	// begin writing to transfer cmd buffer
@@ -140,16 +186,16 @@ void trans_simulation::recordTransferCommands()
 	copyRegion.size = buffers[INSTANCE]->size * sizeof(particle);
 	vkCmdCopyBuffer(transferCmdBuffer,
 		buffers[INSTANCE]->buffer[buffIndex],   // copy from storage to draw
-		buffers[INSTANCE]->buffer[buffIndex+1],
+		buffers[INSTANCE]->buffer[buffIndex + 1],
 		1,
 		&copyRegion);
 
 
 	// update barrier
 	computeBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-	computeBarrier.dstAccessMask = VK_ACCESS_INDIRECT_COMMAND_READ_BIT;
+	computeBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 	drawBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-	drawBarrier.dstAccessMask = VK_ACCESS_INDIRECT_COMMAND_READ_BIT;
+	drawBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 
 	VkBufferMemoryBarrier memBarriersUpdate[] = { computeBarrier, drawBarrier };
 
@@ -157,15 +203,17 @@ void trans_simulation::recordTransferCommands()
 	vkCmdPipelineBarrier(
 		transferCmdBuffer,
 		VK_PIPELINE_STAGE_TRANSFER_BIT,
-		VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT,
+		VK_PIPELINE_STAGE_VERTEX_SHADER_BIT,
 		0, // no flags
 		0, nullptr,
 		2, memBarriersUpdate,
 		0, nullptr);
 
+
 	// end tra writing
 	vkEndCommandBuffer(transferCmdBuffer);
 }
+
 // copy compute results
 void trans_simulation::copyComputeResults()
 {
@@ -174,9 +222,9 @@ void trans_simulation::copyComputeResults()
 	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 	submitInfo.commandBufferCount = 1;
 	submitInfo.pCommandBuffers = &transferCmdBuffer;
-	// Submit to queue (maybe graphics?)
-	VkFence fence = VK_NULL_HANDLE;
-	if (vkQueueSubmit(compute->queue, 1, &submitInfo, fence) != VK_SUCCESS)
+	// Submit to queue asynchronously
+	vkResetFences(device, 1, &compute->fence);
+	if (vkQueueSubmit(transferQueue, 1, &submitInfo, compute->fence) != VK_SUCCESS)
 		throw std::runtime_error("failed to submit transfer queue");
 
 }
@@ -184,37 +232,33 @@ void trans_simulation::copyComputeResults()
 void trans_simulation::computeTransfer()
 {
 	// Check for compute operation results
-	if (compute->fence && VK_SUCCESS == vkGetFenceStatus(device, compute->fence))
+	if (VK_SUCCESS == vkGetFenceStatus(device, compute->fence))
 	{
 		copyComputeResults();
-		vkDestroyFence(device, compute->fence, nullptr);
-		//compute->fence = nullptr;// new fence;
-		VkFence newFence = VK_NULL_HANDLE;
-		compute->fence = newFence;
+
 	}
 }
 
 void trans_simulation::dispatchCompute()
 {
-	if (!compute->fence)
+	auto fenceResult = vkWaitForFences(device, 1, &compute->fence, VK_TRUE, UINT64_MAX);
+	// Submit compute commands
+	while (fenceResult != VK_SUCCESS)
 	{
-		// create fence
-		// Fence for compute CB sync
-		VkFenceCreateInfo fenceCreateInfo{};
-		fenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-		//fenceCreateInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
-		if (vkCreateFence(device, &fenceCreateInfo, nullptr, &compute->fence) != VK_SUCCESS)
-			throw std::runtime_error("Failed creating compute fence");
+		if (fenceResult == VK_ERROR_DEVICE_LOST)
+			throw std::runtime_error("device crashed");
 
+		fenceResult = vkWaitForFences(device, 1, &compute->fence, VK_TRUE, UINT64_MAX);
+	};
 
-		VkSubmitInfo computeSubmitInfo{};
-		computeSubmitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-		computeSubmitInfo.pCommandBuffers = &compute->commandBuffer;
-		computeSubmitInfo.commandBufferCount = 1;
+	vkResetFences(device, 1, &compute->fence);
+	VkSubmitInfo computeSubmitInfo{};
+	computeSubmitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	computeSubmitInfo.pCommandBuffers = &compute->commandBuffer;
+	computeSubmitInfo.commandBufferCount = 1;
 
-		if (vkQueueSubmit(compute->queue, 1, &computeSubmitInfo, compute->fence) != VK_SUCCESS)
-			throw std::runtime_error("failed to submit compute queue");
-	}
+	if (vkQueueSubmit(compute->queue, 1, &computeSubmitInfo, compute->fence) != VK_SUCCESS)
+		throw std::runtime_error("failed to submit compute queue");
 }
 
 void trans_simulation::cleanup()
