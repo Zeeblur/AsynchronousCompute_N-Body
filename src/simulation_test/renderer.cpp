@@ -1686,36 +1686,6 @@ void Renderer::setVertexData(const std::vector<Vertex> vert, const std::vector<u
 
 }
 
-int Renderer::findComputeQueueFamily(VkPhysicalDevice pd)
-{
-	// find and return the index of compute queue family for device
-
-	int index = -1;
-
-	// as before, find them, set them
-	uint32_t queueFamilyCount = 0;
-	vkGetPhysicalDeviceQueueFamilyProperties(pd, &queueFamilyCount, nullptr);
-
-	std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
-	vkGetPhysicalDeviceQueueFamilyProperties(pd, &queueFamilyCount, queueFamilies.data());
-
-	// find suitable family that supports compute->
-	unsigned int i = 0;
-	for (const auto& queueFamily : queueFamilies)
-	{
-
-		// check for compute support 
-		if (queueFamily.queueCount > 0 && queueFamily.queueFlags & VK_QUEUE_COMPUTE_BIT)
-		{
-			index = i;
-			break;
-		}
-		i++;
-	}
-
-	return index;
-}
-
 void Renderer::createComputeUBO()
 {
 	compute->ubo.particleCount = PARTICLE_COUNT;

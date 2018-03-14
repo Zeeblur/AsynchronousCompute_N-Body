@@ -140,9 +140,9 @@ void trans_simulation::recordTransferCommands()
 
 	// update barrier
 	computeBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-	computeBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+	computeBarrier.dstAccessMask = VK_ACCESS_INDIRECT_COMMAND_READ_BIT;
 	drawBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-	drawBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+	drawBarrier.dstAccessMask = VK_ACCESS_INDIRECT_COMMAND_READ_BIT;
 
 	VkBufferMemoryBarrier memBarriersUpdate[] = { computeBarrier, drawBarrier };
 
@@ -150,7 +150,7 @@ void trans_simulation::recordTransferCommands()
 	vkCmdPipelineBarrier(
 		transferCmdBuffer,
 		VK_PIPELINE_STAGE_TRANSFER_BIT,
-		VK_PIPELINE_STAGE_VERTEX_SHADER_BIT,
+		VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT,
 		0, // no flags
 		0, nullptr,
 		2, memBarriersUpdate,
@@ -169,8 +169,8 @@ void trans_simulation::copyComputeResults()
 	submitInfo.pCommandBuffers = &transferCmdBuffer;
 	// Submit to queue (maybe graphics?)
 	VkFence fence = VK_NULL_HANDLE;
-	if (vkQueueSubmit(graphicsQueue, 1, &submitInfo, fence) != VK_SUCCESS)
-		throw std::runtime_error("failed to submit gfx queue");
+	if (vkQueueSubmit(compute->queue, 1, &submitInfo, fence) != VK_SUCCESS)
+		throw std::runtime_error("failed to submit transfer queue");
 
 }
 
@@ -212,5 +212,5 @@ void trans_simulation::dispatchCompute()
 
 void trans_simulation::cleanup()
 {
-
+	compute->cleanup(device);
 }

@@ -65,7 +65,7 @@ void comp_simulation::recordComputeCommands()
 	bufferBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 	bufferBarrier.buffer = buffers[INSTANCE]->buffer[buffIndex];
 	//bufferBarrier.size = VK_WHOLE_SIZE;
-	bufferBarrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;						// Vertex shader invocations have finished reading from the buffer
+	bufferBarrier.srcAccessMask = VK_ACCESS_INDIRECT_COMMAND_READ_BIT;						// Vertex shader invocations have finished reading from the buffer
 	bufferBarrier.dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT;								// Compute shader wants to write to the buffer
 																							// Compute and graphics queue may have different queue families (see VulkanDevice::createLogicalDevice)
 																							// For the barrier to work across different queues, we need to set their family indices
@@ -74,7 +74,7 @@ void comp_simulation::recordComputeCommands()
 
 	vkCmdPipelineBarrier(
 		compute->commandBuffer,
-		VK_PIPELINE_STAGE_VERTEX_SHADER_BIT,
+		VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT,
 		VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
 		0, // no flags
 		0, nullptr,
@@ -90,7 +90,7 @@ void comp_simulation::recordComputeCommands()
 	// Add memory barrier to ensure that compute shader has finished writing to the buffer
 	// Without this the (rendering) vertex shader may display incomplete results (partial data from last frame) 
 	bufferBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;								// Compute shader has finished writes to the buffer
-	bufferBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;						// Vertex shader invocations want to read from the buffer
+	bufferBarrier.dstAccessMask = VK_ACCESS_INDIRECT_COMMAND_READ_BIT;						// Vertex shader invocations want to read from the buffer
 	bufferBarrier.buffer = buffers[INSTANCE]->buffer[buffIndex];
 	//bufferBarrier.size = VK_WHOLE_SIZE;
 	// Compute and graphics queue may have different queue families (see VulkanDevice::createLogicalDevice)
@@ -101,7 +101,7 @@ void comp_simulation::recordComputeCommands()
 	vkCmdPipelineBarrier(
 		compute->commandBuffer,
 		VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-		VK_PIPELINE_STAGE_VERTEX_SHADER_BIT,
+		VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT,
 		0, // no flags
 		0, nullptr,
 		1, &bufferBarrier,
@@ -143,5 +143,5 @@ void comp_simulation::dispatchCompute()
 
 void comp_simulation::cleanup()
 {
-
+	compute->cleanup(device);
 }
