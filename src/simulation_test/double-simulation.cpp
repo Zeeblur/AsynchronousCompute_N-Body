@@ -23,10 +23,15 @@ void double_simulation::createBufferObjects()
 
 void double_simulation::frame()
 {
-	renderer->drawFrame();			   // render			   
-	dispatchCompute();				   // submit compute
 	renderer->updateUniformBuffer();   // update
-	renderer->updateCompute();		   // update				
+	renderer->updateCompute();		   // update	
+	dispatchCompute();				   // submit compute
+	renderer->drawFrame();			   // render	  
+
+	waitOnFence(renderer->graphicsFence);
+	bufferIndex = 1 - bufferIndex;
+
+	waitOnFence(compute->fence);
 }
 
 void double_simulation::createDescriptorPool()
@@ -278,11 +283,7 @@ void double_simulation::dispatchCompute()
 	if (vkQueueSubmit(comp->queue, 1, &computeSubmitInfo, comp->fence) != VK_SUCCESS)
 		throw std::runtime_error("failed to submit compute queue");
 
-	waitOnFence(renderer->graphicsFence);
 
-	bufferIndex = 1 - bufferIndex;
-
-	waitOnFence(comp->fence);
 }
 
 void double_simulation::cleanup()

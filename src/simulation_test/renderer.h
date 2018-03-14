@@ -136,6 +136,8 @@ private:
 		app->recreateSwapChain();
 	}
 
+	MODE chosenSimMode;
+
 	//Vulkan Instance methods
 	void createInstance();
 	void setupDebugCallback();
@@ -169,8 +171,6 @@ private:
 	void createIndexBuffer();
 	void createUniformBuffer();
 	void createDescriptorSet();
-
-	void createCommandBuffers();
 	void createSemaphores();
 
 	// checks

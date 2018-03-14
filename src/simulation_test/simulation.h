@@ -101,7 +101,7 @@ class double_simulation : public simulation
 	void allocateGraphicsCommandBuffers();
 	void createDescriptorPool();
 	void createDescriptorSets();
-	int bufferIndex = 0;
 public:
 	double_simulation(const VkQueue* pQ, const VkQueue* gQ, const VkDevice* dev);
+	int bufferIndex = 0;
 };

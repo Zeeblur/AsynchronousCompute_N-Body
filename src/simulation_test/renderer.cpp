@@ -26,6 +26,9 @@ void Renderer::initWindow()
 
 void Renderer::initVulkan(const MODE chosenMode, const bool AMD)
 {
+	// store mode
+	chosenSimMode = chosenMode;
+
 	switch (chosenMode)
 	{
 	case COMPUTE:
@@ -80,7 +83,7 @@ void Renderer::mainLoop()
 {
 	while (!glfwWindowShouldClose(window))
 	{
-		glfwPollEvents();
+
 
 		// start timer
 		auto startTime = std::chrono::high_resolution_clock::now();
@@ -102,6 +105,8 @@ void Renderer::mainLoop()
 			fpsTimer = 0.0f;
 			frameCounter = 0;
 		}
+
+		glfwPollEvents();
 	}
 
 	vkDeviceWaitIdle(device);
@@ -387,6 +392,11 @@ void Renderer::createSwapChain()
 		imageCount = swapChainSupport.capabilities.maxImageCount;
 	}
 
+	// set image count to 2 for double buffering
+	if (chosenSimMode == DOUBLE)
+	{
+		imageCount = 2;
+	}
 
 	// create info for swapchain
 	VkSwapchainCreateInfoKHR createInfo = {};
@@ -878,12 +888,25 @@ void Renderer::createCommandPool()
 	VkCommandPoolCreateInfo poolInfo = {};
 	poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
 	poolInfo.queueFamilyIndex = queueFamilyIndices.graphicsFamily;
-	poolInfo.flags = 0; // Optional - for recreating them
+	poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 
 	// create the pool
 	if (vkCreateCommandPool(device, &poolInfo, nullptr, &gfxCommandPool) != VK_SUCCESS)
-		throw std::runtime_error("failed to create command pool!");
-	
+		throw std::runtime_error("failed to create gfx command pool!");
+
+	// create compute command pool
+	if (queueFamilyIndices.graphicsFamily == queueFamilyIndices.computeFamily)
+	{
+		compute->commandPool = gfxCommandPool;
+	}
+	else 	// Separate command pool as queue family for compute may be different than graphics
+	{
+		poolInfo.queueFamilyIndex = queueFamilyIndices.computeFamily;
+
+		if (vkCreateCommandPool(device, &poolInfo, nullptr, &compute->commandPool) != VK_SUCCESS)
+			throw std::runtime_error("Failed creating compute cmd pool");
+
+	}	
 }
 
 // handle layout condistions
@@ -1135,7 +1158,15 @@ void Renderer::drawFrame()
 
 	// which command buffers to submit for exe - the one that binds the swap chain image we aquired as a colour attachment
 	submitInfo.commandBufferCount = 1;
-	submitInfo.pCommandBuffers = &graphicsCmdBuffers[imageIndex];
+
+	if (chosenSimMode == DOUBLE)
+	{
+		submitInfo.pCommandBuffers = &graphicsCmdBuffers[dynamic_cast<double_simulation*>(sim)->bufferIndex];
+	}
+	else
+	{
+		submitInfo.pCommandBuffers = &graphicsCmdBuffers[imageIndex];
+	}
 
 	// which semaphores to signal once the command buffers have finished execution.
 	VkSemaphore signalSemaphores[] = { renderFinishedSemaphore };
@@ -1701,18 +1732,12 @@ void Renderer::prepareCompute()
 {
 	createComputeUBO();
 
-	// get compute capable device queue
-	int queueIndex = findComputeQueueFamily(physicalDevice);
-	// store value
-	queueFamilyIndices.compute = queueIndex;
-	vkGetDeviceQueue(device, queueIndex, 0, &compute->queue);
-
 	// create compute pipeline
 	// Compute pipelines are created separate from graphics pipelines even if they use the same queue (family index)
 
 	VkDescriptorSetLayoutBinding positionBinding{};
 	positionBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-	positionBinding.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+	positionBinding.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_VERTEX_BIT;;
 	positionBinding.binding = 0;
 	positionBinding.descriptorCount = 1;
 
@@ -1778,14 +1803,6 @@ void Renderer::prepareCompute()
 	// create it
 	if(vkCreateComputePipelines(device, pipeCache, 1, &computePipelineCreateInfo, nullptr, &compute->pipeline) != VK_SUCCESS)
 		throw std::runtime_error("failed creating compute pipeline");
-
-	// Separate command pool as queue family for compute may be different than graphics
-	VkCommandPoolCreateInfo cmdPoolInfo = {};
-	cmdPoolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-	cmdPoolInfo.queueFamilyIndex = queueFamilyIndices.compute;
-	cmdPoolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-	if(vkCreateCommandPool(device, &cmdPoolInfo, nullptr, &compute->commandPool) != VK_SUCCESS)
-		throw std::runtime_error("Failed creating compute cmd pool");
 
 	// Create a command buffer for compute operations
 	sim->allocateComputeCommandBuffers();
