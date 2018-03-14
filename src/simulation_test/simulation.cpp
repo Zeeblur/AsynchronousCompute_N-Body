@@ -4,6 +4,33 @@
 
 simulation::~simulation() {}
 
+void simulation::createCommandPools(QueueFamilyIndices& queueFamilyIndices, VkPhysicalDevice& phys)
+{
+	// record commands for drawing on the graphics queue
+	VkCommandPoolCreateInfo poolInfo = {};
+	poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+	poolInfo.queueFamilyIndex = queueFamilyIndices.graphicsFamily;
+	poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+
+	// create the pool
+	if (vkCreateCommandPool(device, &poolInfo, nullptr, &renderer->gfxCommandPool) != VK_SUCCESS)
+		throw std::runtime_error("failed to create gfx command pool!");
+
+	// create compute command pool
+	if (queueFamilyIndices.graphicsFamily == queueFamilyIndices.computeFamily)
+	{
+		compute->commandPool = renderer->gfxCommandPool;
+	}
+	else 	// Separate command pool as queue family for compute may be different than graphics
+	{
+		poolInfo.queueFamilyIndex = queueFamilyIndices.computeFamily;
+
+		if (vkCreateCommandPool(device, &poolInfo, nullptr, &compute->commandPool) != VK_SUCCESS)
+			throw std::runtime_error("Failed creating compute cmd pool");
+
+	}
+}
+
 void simulation::recordGraphicsCommands()
 {
 

@@ -30,6 +30,13 @@ void trans_simulation::frame()
 	renderer->updateCompute();		   // update 
 }
 
+void trans_simulation::createCommandPools(QueueFamilyIndices& queueFamilyIndices, VkPhysicalDevice& phys)
+{
+	simulation::createCommandPools(queueFamilyIndices, phys); // call base class
+
+	// create transfer command pool
+}
+
 // compute & transfer command buffers
 void trans_simulation::allocateComputeCommandBuffers()
 {

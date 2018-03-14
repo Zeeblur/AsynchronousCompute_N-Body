@@ -185,7 +185,6 @@ private:
 
 	// find queues
 	QueueFamilyIndices findQueuesFamilies(VkPhysicalDevice device);
-	int findComputeQueueFamily(VkPhysicalDevice device);
 
 	SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice device);
 	VkSurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats);

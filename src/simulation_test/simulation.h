@@ -6,6 +6,7 @@
 #include <memory>
 
 class Renderer;
+struct QueueFamilyIndices;
 
 class simulation
 {
@@ -39,6 +40,7 @@ public:
 	BufferObject* buffers[3];//  { new VertexBO(), new IndexBO(), new InstanceBO(); };
 
 	virtual void frame() = 0;
+	virtual void createCommandPools(QueueFamilyIndices& queueFamilyIndices, VkPhysicalDevice& phys);
 	virtual void allocateComputeCommandBuffers() = 0;
 	virtual void recordComputeCommands() = 0;
 	virtual void recordGraphicsCommands();
@@ -55,12 +57,15 @@ class comp_simulation : public simulation
 {
 private:
 	void frame() override;
+	void createCommandPools(QueueFamilyIndices& queueFamilyIndices, VkPhysicalDevice& phys) override;
 	void allocateComputeCommandBuffers() override;
 	void recordComputeCommands() override;
 	void createBufferObjects() override;
 	void dispatchCompute() override;
 	void cleanup() override;
 
+
+	int findComputeQueueFamily(VkPhysicalDevice device);
 public:
 	comp_simulation(const VkQueue* pQ, const VkQueue* gQ, const VkDevice* dev);
 	
@@ -70,6 +75,7 @@ class trans_simulation : public simulation
 {
 private:
 	void frame() override;
+	void createCommandPools(QueueFamilyIndices& queueFamilyIndices, VkPhysicalDevice& phys) override;
 	void allocateComputeCommandBuffers() override;
 	void recordComputeCommands() override;
 	void createBufferObjects() override;
