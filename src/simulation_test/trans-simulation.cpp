@@ -120,8 +120,14 @@ void trans_simulation::recordComputeCommands()
 	vkCmdBindPipeline(compute->commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, compute->pipeline);
 	vkCmdBindDescriptorSets(compute->commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, compute->pipelineLayout, 0, 1, &compute->descriptorSet, 0, 0);
 
+	vkCmdResetQueryPool(compute->commandBuffer, renderer->computeQueryPool, 0, 2);
+	vkCmdWriteTimestamp(compute->commandBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, renderer->computeQueryPool, 0);
+
 	// dispatch shader
 	vkCmdDispatch(compute->commandBuffer, renderer->PARTICLE_COUNT, 1, 1);
+
+	vkCmdWriteTimestamp(compute->commandBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, renderer->computeQueryPool, 1);
+
 
 	// end cmd writing
 	vkEndCommandBuffer(compute->commandBuffer);
@@ -264,4 +270,5 @@ void trans_simulation::dispatchCompute()
 void trans_simulation::cleanup()
 {
 	compute->cleanup(device);
+	vkDestroyCommandPool(device, transferPool, nullptr);
 }

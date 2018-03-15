@@ -129,12 +129,19 @@ void Renderer::mainLoop()
 		auto deltaT = std::chrono::duration<double, std::milli>(endTime - startTime).count();
 		frameTimer = (float)deltaT / 1000.0f;
 
+		// reset comput now to get results back
+		if (chosenSimMode == DOUBLE)
+		{
+			dynamic_cast<double_simulation*>(sim)->waitOnFence(compute->fence);
+		}
+
 		// Fetch results.
 		std::uint64_t results[8] = {};
 		vkGetQueryPoolResults(device, renderQueryPool, 0, 1, sizeof(std::uint64_t) * 2, &results[G_START], 0, VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT | VK_QUERY_RESULT_WITH_AVAILABILITY_BIT);  // graphics start
 		vkGetQueryPoolResults(device, renderQueryPool, 1, 1, sizeof(std::uint64_t) * 2, &results[G_END], 0, VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT | VK_QUERY_RESULT_WITH_AVAILABILITY_BIT);	 // graphics end
 		vkGetQueryPoolResults(device, computeQueryPool, 0, 1, sizeof(std::uint64_t) * 2, &results[C_START], 0, VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT | VK_QUERY_RESULT_WITH_AVAILABILITY_BIT); // compute start
 		vkGetQueryPoolResults(device, computeQueryPool, 1, 1, sizeof(std::uint64_t) * 2, &results[C_END], 0, VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT | VK_QUERY_RESULT_WITH_AVAILABILITY_BIT); // compute end
+
 
 																																																		 // output results
 		std::uint64_t initial = 0;
@@ -147,7 +154,7 @@ void Renderer::mainLoop()
 			// if gfx is first. Async if start of c overlaps g end,
 			if (results[C_START] < results[G_END])
 			{
-				//std::cout << "ASYNCASYNCASYNC" << std::endl;
+				std::cout << "ASYNCASYNCASYNC" << std::endl;
 				async = true;
 			}
 		}
@@ -157,7 +164,7 @@ void Renderer::mainLoop()
 			// if compute is first. Async if start of g overlaps c end,
 			if (results[G_START] < results[C_END])
 			{
-				//std::cout << "ASYNCASYNCASYNC" << std::endl;
+				std::cout << "ASYNCASYNCASYNC" << std::endl;
 				false;
 			}
 		}
@@ -238,7 +245,8 @@ void Renderer::cleanup()
 	vkDestroySemaphore(device, renderFinishedSemaphore, nullptr);
 	vkDestroySemaphore(device, imageAvailableSemaphore, nullptr);
 
-	vkDestroyCommandPool(device, gfxCommandPool, nullptr);
+	if (chosenSimMode == COMPUTE)
+		vkDestroyCommandPool(device, gfxCommandPool, nullptr);
 
 	vkDestroyDevice(device, nullptr);
 	DestroyDebugReportCallbackEXT(instance, callback, nullptr);
@@ -1225,7 +1233,7 @@ void Renderer::drawFrame()
 
 	if (chosenSimMode == DOUBLE)
 	{
-		submitInfo.pCommandBuffers = &graphicsCmdBuffers[dynamic_cast<double_simulation*>(sim)->bufferIndex+1];
+		submitInfo.pCommandBuffers = &graphicsCmdBuffers[dynamic_cast<double_simulation*>(sim)->bufferIndex];
 	}
 	else
 	{

@@ -30,8 +30,6 @@ void double_simulation::frame()
 
 	waitOnFence(renderer->graphicsFence);
 	bufferIndex = 1 - bufferIndex;
-
-	waitOnFence(compute->fence);
 }
 
 void double_simulation::createDescriptorPool()
@@ -178,11 +176,10 @@ void double_simulation::recordComputeCommand(int frame)
 	vkCmdBindPipeline(comp->commandBuffer[frame], VK_PIPELINE_BIND_POINT_COMPUTE, comp->pipeline);
 
 	vkCmdBindDescriptorSets(comp->commandBuffer[frame], VK_PIPELINE_BIND_POINT_COMPUTE, comp->pipelineLayout, 0, 1, &comp->descriptorSet[frame], 0, nullptr);
-	//vkCmdResetQueryPool(comp->commandBuffer[frame], computeQueryPool, 0, 2);
-	//vkCmdWriteTimestamp(comp->commandBuffer[frame], VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, computeQueryPool, 0);
+	vkCmdResetQueryPool(comp->commandBuffer[frame], renderer->computeQueryPool, 0, 2);
+	vkCmdWriteTimestamp(comp->commandBuffer[frame], VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, renderer->computeQueryPool, 0);
 	vkCmdDispatch(comp->commandBuffer[frame], renderer->PARTICLE_COUNT, 1, 1);
-	//vkCmdWriteTimestamp(comp->commandBuffer[frame], VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, computeQueryPool, 1);
-
+	vkCmdWriteTimestamp(comp->commandBuffer[frame], VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, renderer->computeQueryPool, 1);
 
 	// end cmd writing
 	vkEndCommandBuffer(comp->commandBuffer[frame]);

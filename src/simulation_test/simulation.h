@@ -104,7 +104,6 @@ class double_simulation : public simulation
 	void dispatchCompute() override;
 	void cleanup() override;
 
-	void waitOnFence(VkFence& fence);
 	void recordRenderCommand(int frame);
 	void recordComputeCommand(int frame);
 	void allocateGraphicsCommandBuffers();
@@ -113,4 +112,5 @@ class double_simulation : public simulation
 public:
 	double_simulation(const VkQueue* pQ, const VkQueue* gQ, const VkDevice* dev);
 	int bufferIndex = 0;
+	void waitOnFence(VkFence& fence);
 };
