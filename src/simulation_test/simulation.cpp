@@ -66,6 +66,10 @@ void simulation::recordGraphicsCommands()
 											  // this call resets command buffer as not possible to ammend
 		vkBeginCommandBuffer(renderer->graphicsCmdBuffers[i], &beginInfo);
 
+		// reset timer
+		vkCmdResetQueryPool(renderer->graphicsCmdBuffers[i], renderer->renderQueryPool, 0, 2);
+
+
 		// Start the render pass
 		VkRenderPassBeginInfo renderPassInfo = {};
 		renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -103,10 +107,14 @@ void simulation::recordGraphicsCommands()
 		vkCmdBindIndexBuffer(renderer->graphicsCmdBuffers[i], buffers[INDEX]->buffer[buffIndex], 0, VK_INDEX_TYPE_UINT16);
 		vkCmdBindDescriptorSets(renderer->graphicsCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, renderer->pipelineLayout, 0, 1, &renderer->gfxDescriptorSet, 0, nullptr);
 
+		vkCmdWriteTimestamp(renderer->graphicsCmdBuffers[i], VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, renderer->renderQueryPool, 0);
+
 		// DRAW A TRIANGLEEEEE!!!?"!?!!?!?!?!?!?!
 		// vertex count, instance count, first vertex/ first instance. - used for offsets
 		vkCmdDrawIndexed(renderer->graphicsCmdBuffers[i], static_cast<uint32_t>(buffers[INDEX]->size), static_cast<uint32_t>(buffers[INSTANCE]->size), 0, 0, 0);
 		//vkCmdDraw(commandBuffers[i], static_cast<uint32_t>(vertices.size()), 1, 0, 0);
+
+		vkCmdWriteTimestamp(renderer->graphicsCmdBuffers[i], VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, renderer->renderQueryPool, 1);
 
 		// end the pass
 		vkCmdEndRenderPass(renderer->graphicsCmdBuffers[i]);

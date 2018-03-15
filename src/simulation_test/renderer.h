@@ -84,6 +84,7 @@ struct BufferObject; // forward declare
 
 // Resources for the compute part of the example
 struct ComputeConfig;
+struct parameters;
 
 class Renderer
 {
@@ -104,6 +105,8 @@ private:
 
 	time_point<system_clock> currentTime;
 	VkPipelineCache pipeCache;
+
+	const parameters* simulationParameters;
 
 	void createComputeUBO();
 
@@ -173,6 +176,10 @@ private:
 	void createDescriptorSet();
 	void createSemaphores();
 
+	// for timestamps
+	void createQueryPools();
+	double timestampPeriod;
+
 	// checks
 	bool checkValidationLayerSupport();
 	std::vector<const char*> Renderer::getExtensions();
@@ -241,6 +248,7 @@ public:
 	VkDescriptorSet gfxDescriptorSet;
 	VkFence graphicsFence;
 	VkDescriptorPool descriptorPool;
+	VkQueryPool renderQueryPool, computeQueryPool;
 
 
 	inline static std::shared_ptr<Renderer> get()
@@ -266,7 +274,7 @@ public:
 	} queueFamilyIndices;
 
 	void setVertexData(const std::vector<Vertex> vert, const std::vector<uint16_t> ind, const std::vector<particle> part);
-	void createConfig(const int pCount);
+	void createConfig(const parameters& simParam);
 	int PARTICLE_COUNT = 0;
 
 	// buffer creation & copy functions

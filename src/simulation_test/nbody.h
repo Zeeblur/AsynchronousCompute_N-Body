@@ -15,6 +15,33 @@ enum MODE
 	DOUBLE
 };
 
+extern struct parameters
+{
+	// default values for simulation
+	uint32_t totalTime = 120;
+	uint32_t pCount = 2000;
+	uint32_t stacks = 20;
+	uint32_t slices = 20;
+	glm::vec3 dims = glm::vec3(0.02f);
+	MODE chosenMode;
+
+	char *modeTypes[3] =
+	{
+		"NORMAL COMPUTE",
+		"TRANSFER BUFFERS _ ASYNC",
+		"DOUBLE BUFFERING _ ASYNC"
+	};
+
+	void print()
+	{
+		std::cout << "Simulation Mode: " << modeTypes[chosenMode] << std::endl;
+		std::cout << "Time to Run Sim (seconds): " << totalTime << std::endl;
+		std::cout << "Particle count: " << pCount << std::endl;
+		std::cout << "Stacks: " << stacks << std::endl;
+		std::cout << "Slices: " << slices << std::endl;
+	}
+};
+
 class nbody
 {
 
@@ -27,7 +54,7 @@ class nbody
 	std::vector<Vertex> vertexBuffer;
 	std::vector<uint16_t> indexBuffer;
 
-	void createSphereGeom(const unsigned int stacks, const unsigned int slices, const glm::vec3 &dims);
+	void createSphereGeom(const unsigned int stacks, const unsigned int slices, const glm::vec3 dims);
 
 
 public:
@@ -38,7 +65,7 @@ public:
 	
 	void prepareParticles();
 
-	void run(const uint32_t totalTime = 120); // default 2 mins
+	void run(const parameters simParam); // default 2 mins
 
 
 	unsigned int num_particles = 0;

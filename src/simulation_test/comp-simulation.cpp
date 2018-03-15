@@ -139,8 +139,14 @@ void comp_simulation::recordComputeCommands()
 	vkCmdBindPipeline(compute->commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, compute->pipeline);
 	vkCmdBindDescriptorSets(compute->commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, compute->pipelineLayout, 0, 1, &compute->descriptorSet, 0, 0);
 
+	// time compute
+	vkCmdResetQueryPool(compute->commandBuffer, renderer->computeQueryPool, 0, 2);
+	vkCmdWriteTimestamp(compute->commandBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, renderer->computeQueryPool, 0);
+
 	// Dispatch the compute     
 	vkCmdDispatch(compute->commandBuffer, renderer->PARTICLE_COUNT, 1, 1);
+
+	vkCmdWriteTimestamp(compute->commandBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, renderer->computeQueryPool, 1);
 
 	// Add memory barrier to ensure that compute shader has finished writing to the buffer
 	// Without this the (rendering) vertex shader may display incomplete results (partial data from last frame) 

@@ -40,19 +40,20 @@ void nbody::prepareParticles()
 	}
 }
 
-void nbody::run(const uint32_t totalTime)
+void nbody::run(const parameters simParam)
 {
 	// loop here  
 	prepareParticles();     
-	createSphereGeom(20, 20, vec3(0.02f));
+	createSphereGeom(simParam.stacks, simParam.slices, simParam.dims);
 	Renderer::get()->setVertexData(vertexBuffer, indexBuffer, particleBuffer);
 	// create config sets up the storage buffers for the data and uniforms. 
 	// creates the descriptions and command buffers.
-	Renderer::get()->createConfig(num_particles);
+
+	Renderer::get()->createConfig(simParam);
 	Renderer::get()->mainLoop();
 }
 
-void nbody::createSphereGeom(const unsigned int stacks, const unsigned int slices, const glm::vec3 &dims)
+void nbody::createSphereGeom(const unsigned int stacks, const unsigned int slices, const glm::vec3 dims)
 {
 
 	glm::vec3 colour = glm::vec3(0.7f, 0.7f, 0.7f);
@@ -122,7 +123,6 @@ void nbody::createSphereGeom(const unsigned int stacks, const unsigned int slice
 	}
 
 }
-
 
 nbody::~nbody()
 {

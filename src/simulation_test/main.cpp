@@ -12,6 +12,8 @@ int main(int argc, const char *argv[])
 	args::ValueFlag<int> particleCount(parser, "Particle Count", "Set the number of particles.", { 'p', "particles" });
 	args::ValueFlag<int> stackCount(parser, "Stack Count", "Set the number of stacks within the particle geometry", { 's', "st", "stacks" });
 	args::ValueFlag<int> sliceCount(parser, "Slice Count", "Set the number of slices within the particle geometry", { 'l', "sl", "slices" });
+	args::ValueFlag<int> dimensions(parser, "Scale", "Set the scale of the spheres", { 'x', "scales" });
+
 
 	args::Group group2(parser, "What mode the simulation uses:", args::Group::Validators::Xor);
 	args::Flag mode1(group2, "Compute Only", "Run the simulation using normal compute.", { 'c', "compute" });
@@ -48,22 +50,24 @@ int main(int argc, const char *argv[])
 		return 1;
 	}
 
-	int particles = 10; // default
-	if (particleCount)
-	{ 
-		particles = args::get(particleCount);
-		std::cout << "particles: " << args::get(particleCount) << std::endl;
-	}
-	if (stackCount) { std::cout << "stacks: " << args::get(stackCount) << std::endl; }
-	if (sliceCount) { std::cout << "slices: " << args::get(sliceCount) << std::endl; }
+	parameters simParam;
 
 	MODE choice = mode1 ? COMPUTE : mode2 ? TRANSFER : DOUBLE;
 
-	nbody simulation(particles, amd, choice); // maximum in release so far with current res settings
+	if (particleCount){	simParam.pCount = args::get(particleCount); }
+	if (stackCount) { simParam.stacks = args::get(stackCount); }
+	if (sliceCount) { simParam.slices = args::get(sliceCount); }
+	if (dimensions) { simParam.dims = glm::vec3(args::get(dimensions)); }
+	if (expTime) { simParam.totalTime = args::get(expTime); }
+	simParam.chosenMode = choice;
+
+	simParam.print();
+	
+	nbody simulation(simParam.pCount, amd, choice); // maximum in release so far with current res settings
 
 	try
 	{
-		simulation.run(0);
+		simulation.run(simParam);
 	}
 	catch (const std::runtime_error& e)
 	{

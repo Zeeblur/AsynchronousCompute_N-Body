@@ -7,6 +7,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
+#include <fstream>
 
 // Custom define for better code readability
 #define VK_FLAGS_NONE 0
@@ -63,9 +64,10 @@ void Renderer::initVulkan(const MODE chosenMode, const bool AMD)
 	createTextureSampler();
 }
 
-void Renderer::createConfig(const int pCount)
+void Renderer::createConfig(const parameters& simParam)
 {
-	PARTICLE_COUNT = pCount;
+	simulationParameters = &simParam;
+	PARTICLE_COUNT = simParam.pCount;
 
 	sim->createBufferObjects();
 
@@ -73,14 +75,46 @@ void Renderer::createConfig(const int pCount)
 	sim->createDescriptorPool();
 	createDescriptorSet();
 
+	createQueryPools();
+
 	sim->recordGraphicsCommands();
 	createSemaphores();
 
 	prepareCompute();
 }
 
+enum STAGES
+{
+	G_START = 0,
+	G_END = 2,
+	C_START = 4,
+	C_END = 6
+};
+
 void Renderer::mainLoop()
 {
+	// store in file
+	std::ofstream file("testFile.csv", std::ofstream::out);
+
+	// header
+	file << "Simulation Type" << ", " << simulationParameters->modeTypes[chosenSimMode] << std::endl;
+	file << "Particles, " << PARTICLE_COUNT << ", "
+		<< "Stack Count, " << simulationParameters->stacks << ", "
+		<< "Slice Count, " << simulationParameters->slices << ", "
+		<< "Mesh Scale, " << simulationParameters->dims.x  // assuming only square scales.
+		<< std::endl;
+
+	file << "Frame" << ", "
+		<< "Frame Time (ms)" << ", "
+		<< "Compute Timestamp Start" << ", "
+		<< "Compute Timestamp End" << ", "
+		<< "Compute Time" << ", "
+		<< "Graphics Timestamp Start" << ", "
+		<< "Graphics Timestamp End" << ", "
+		<< "Graphics Time" << ", " 
+		<< "async?" << std::endl;
+
+
 	while (!glfwWindowShouldClose(window))
 	{
 
@@ -94,19 +128,53 @@ void Renderer::mainLoop()
 		auto endTime = std::chrono::high_resolution_clock::now();
 		auto deltaT = std::chrono::duration<double, std::milli>(endTime - startTime).count();
 		frameTimer = (float)deltaT / 1000.0f;
-		fpsTimer += (float)deltaT;
-		if (fpsTimer > 1000.0f)
+
+		// Fetch results.
+		std::uint64_t results[8] = {};
+		vkGetQueryPoolResults(device, renderQueryPool, 0, 1, sizeof(std::uint64_t) * 2, &results[G_START], 0, VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT | VK_QUERY_RESULT_WITH_AVAILABILITY_BIT);  // graphics start
+		vkGetQueryPoolResults(device, renderQueryPool, 1, 1, sizeof(std::uint64_t) * 2, &results[G_END], 0, VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT | VK_QUERY_RESULT_WITH_AVAILABILITY_BIT);	 // graphics end
+		vkGetQueryPoolResults(device, computeQueryPool, 0, 1, sizeof(std::uint64_t) * 2, &results[C_START], 0, VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT | VK_QUERY_RESULT_WITH_AVAILABILITY_BIT); // compute start
+		vkGetQueryPoolResults(device, computeQueryPool, 1, 1, sizeof(std::uint64_t) * 2, &results[C_END], 0, VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT | VK_QUERY_RESULT_WITH_AVAILABILITY_BIT); // compute end
+
+																																																		 // output results
+		std::uint64_t initial = 0;
+		bool async = false;
+
+		// graphics starts execution first
+		if (results[G_START] < results[C_START])
 		{
-			lastFPS = static_cast<uint32_t>(1.0f / frameTimer);
-			//updateTextOverlay();
-
-			std::cout << std::fixed << (frameTimer * 1000.0f) << "ms (" << lastFPS << " fps)" << std::endl;
-
-			fpsTimer = 0.0f;
-			frameCounter = 0;
+			//std::cout << "Gfx" << std::endl;
+			// if gfx is first. Async if start of c overlaps g end,
+			if (results[C_START] < results[G_END])
+			{
+				//std::cout << "ASYNCASYNCASYNC" << std::endl;
+				async = true;
+			}
+		}
+		else
+		{
+			//std::cout << "Compute" << std::endl;
+			// if compute is first. Async if start of g overlaps c end,
+			if (results[G_START] < results[C_END])
+			{
+				//std::cout << "ASYNCASYNCASYNC" << std::endl;
+				false;
+			}
 		}
 
 		glfwPollEvents();
+
+		// print results to file
+
+		file << frameCounter << ", " 
+			<< deltaT << ", "
+			<< results[C_START] << ", "
+			<< results[C_END] << ", "
+			<< (results[C_END] - results[C_START]) * timestampPeriod / 1000000.0 << ", "
+			<< results[G_START] << ", "
+			<< results[G_END] << ", "
+			<< (results[G_END] - results[G_START]) * timestampPeriod / 1000000.0 << ", "
+			<< async << std::endl;
 	}
 
 	vkDeviceWaitIdle(device);
@@ -163,6 +231,8 @@ void Renderer::cleanup()
 		delete b;
 	}
 	
+	vkDestroyQueryPool(device, renderQueryPool, nullptr);
+	vkDestroyQueryPool(device, computeQueryPool, nullptr);
 	vkDestroyFence(device, graphicsFence, nullptr);
 
 	vkDestroySemaphore(device, renderFinishedSemaphore, nullptr);
@@ -508,6 +578,22 @@ void Renderer::createImageViews()
 		
 	}
 }
+
+void Renderer::createQueryPools()
+{
+	VkQueryPoolCreateInfo queryPoolInfo = {};
+	queryPoolInfo.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
+	queryPoolInfo.queryType = VK_QUERY_TYPE_TIMESTAMP;
+	queryPoolInfo.queryCount = 2;
+
+	if (vkCreateQueryPool(device, &queryPoolInfo, nullptr, &renderQueryPool) != VK_SUCCESS)
+		throw std::runtime_error("Failed to create render query pool.");
+
+	if (vkCreateQueryPool(device, &queryPoolInfo, nullptr, &computeQueryPool) != VK_SUCCESS)
+		throw std::runtime_error("Failed to create compute query pool.");
+	
+}
+
 
 // render pass - specifies buffers and samples 
 void Renderer::createRenderPass()
@@ -1431,6 +1517,7 @@ bool Renderer::isDeviceSuitable(VkPhysicalDevice device, const bool AMD)
 		swapChainAdequate = !swapChainSupport.formats.empty() && !swapChainSupport.presentModes.empty();
 	}
 
+	timestampPeriod = deviceProperties.limits.timestampPeriod;
 	return physical && indices.isComplete() && extensionsSupported && swapChainAdequate && deviceFeatures.samplerAnisotropy;
 }
 
