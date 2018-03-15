@@ -8,6 +8,7 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 #include <fstream>
+#include <sstream>
 
 // Custom define for better code readability
 #define VK_FLAGS_NONE 0
@@ -93,8 +94,17 @@ enum STAGES
 
 void Renderer::mainLoop()
 {
+	std::stringstream filetoSave;
+	std::string gpuType = (amdGPU) ? "AMD" : "NVIDIA";
+
+	filetoSave << gpuType << "_S" << (int)chosenSimMode << "_P" << PARTICLE_COUNT <<
+		"_ST" << simulationParameters->stacks <<
+		"_SL" << simulationParameters->slices <<
+		"_SC" << simulationParameters->dims.x <<
+		".csv";
+
 	// store in file
-	std::ofstream file("testFile.csv", std::ofstream::out);
+	std::ofstream file(filetoSave.str(), std::ofstream::out);
 
 	// header
 	file << "Simulation Type" << ", " << simulationParameters->modeTypes[chosenSimMode] << std::endl;
@@ -118,6 +128,10 @@ void Renderer::mainLoop()
 	while (!glfwWindowShouldClose(window))
 	{
 
+		if (secondsRan > simulationParameters->totalTime)
+		{
+			exit(0);
+		}
 
 		// start timer
 		auto startTime = std::chrono::high_resolution_clock::now();
@@ -135,6 +149,18 @@ void Renderer::mainLoop()
 			dynamic_cast<double_simulation*>(sim)->waitOnFence(compute->fence);
 		}
 
+
+		fpsTimer += (float)deltaT;
+		if (fpsTimer > 1000.0f)  // after 1 second
+		{
+			lastFPS = static_cast<uint32_t>(1.0f / frameTimer);
+
+			std::cout << std::fixed << deltaT << "ms (" << lastFPS << " fps)" << std::endl;
+
+			fpsTimer = 0.0f;
+			secondsRan++;
+		}
+
 		// Fetch results.
 		std::uint64_t results[8] = {};
 		vkGetQueryPoolResults(device, renderQueryPool, 0, 1, sizeof(std::uint64_t) * 2, &results[G_START], 0, VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT | VK_QUERY_RESULT_WITH_AVAILABILITY_BIT);  // graphics start
@@ -142,8 +168,6 @@ void Renderer::mainLoop()
 		vkGetQueryPoolResults(device, computeQueryPool, 0, 1, sizeof(std::uint64_t) * 2, &results[C_START], 0, VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT | VK_QUERY_RESULT_WITH_AVAILABILITY_BIT); // compute start
 		vkGetQueryPoolResults(device, computeQueryPool, 1, 1, sizeof(std::uint64_t) * 2, &results[C_END], 0, VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT | VK_QUERY_RESULT_WITH_AVAILABILITY_BIT); // compute end
 
-
-																																																		 // output results
 		std::uint64_t initial = 0;
 		bool async = false;
 
@@ -165,7 +189,7 @@ void Renderer::mainLoop()
 			if (results[G_START] < results[C_END])
 			{
 				std::cout << "ASYNCASYNCASYNC" << std::endl;
-				false;
+				async = true;
 			}
 		}
 
@@ -181,7 +205,7 @@ void Renderer::mainLoop()
 			<< results[G_START] << ", "
 			<< results[G_END] << ", "
 			<< (results[G_END] - results[G_START]) * timestampPeriod / 1000000.0 << ", "
-			<< async << std::endl;
+			<< (async ? "YES" : "NO") << std::endl;
 	}
 
 	vkDeviceWaitIdle(device);
@@ -1499,6 +1523,8 @@ bool Renderer::isDeviceSuitable(VkPhysicalDevice device, const bool AMD)
 	vkGetPhysicalDeviceProperties(device, &deviceProperties);
 	vkGetPhysicalDeviceFeatures(device, &deviceFeatures);
 
+	amdGPU = AMD;
+
 	// Don't choose 1080
 	if (AMD)
 	{
@@ -1506,7 +1532,8 @@ bool Renderer::isDeviceSuitable(VkPhysicalDevice device, const bool AMD)
 		output = strstr(deviceProperties.deviceName, "GTX");
 		if (output)
 		{
-			printf("1080 Found");
+			
+			printf("1080 Found - Skipping\n");
 			return false;
 		}
 	}

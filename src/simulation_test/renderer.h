@@ -232,6 +232,10 @@ private:
 	float frameTimer = 0;
 	float fpsTimer = 0;
 
+	int secondsRan = 0;
+
+	bool amdGPU = false;
+
 public:
 
 	simulation* sim;
