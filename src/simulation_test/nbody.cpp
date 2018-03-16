@@ -82,6 +82,7 @@ void nbody::createSphereGeom(const unsigned int stacks, const unsigned int slice
 		{
 			// Vertex 0
 			float theta = j * delta_theta;
+			s += delta_S;
 			verts[0] = glm::vec3(dims.x * -sin(theta) * sin(rho),
 				dims.y * cos(theta) * sin(rho),
 				dims.z * cos(rho));
@@ -93,7 +94,7 @@ void nbody::createSphereGeom(const unsigned int stacks, const unsigned int slice
 			coords[1] = glm::vec2(s, t - delta_T);
 			// Vertex 2
 			theta = ((j + 1) == slices) ? 0.0f : (j + 1) * delta_theta;
-			s += delta_S;
+			s = 0;
 			verts[2] = glm::vec3(dims.x * -sin(theta) * sin(rho),
 				dims.y * cos(theta) * sin(rho),
 				dims.z * cos(rho));
@@ -104,11 +105,16 @@ void nbody::createSphereGeom(const unsigned int stacks, const unsigned int slice
 				dims.z * cos(rho + delta_rho));
 			coords[3] = glm::vec2(s, t - delta_T);
 
+			for (auto &uv : coords)
+			{
+				uv = vec2(uv.x * 0.2, uv.y * 0.2);
+			}
+
 			//TODO: clean this up
-			vertexBuffer.push_back(Vertex(verts[0], colour, coords[0]));
-			vertexBuffer.push_back(Vertex(verts[1], colour, coords[1]));
-			vertexBuffer.push_back(Vertex(verts[2], colour, coords[2]));
-			vertexBuffer.push_back(Vertex(verts[3], colour, coords[3]));
+			vertexBuffer.push_back(Vertex(verts[0], glm::normalize(verts[0]), coords[0]));
+			vertexBuffer.push_back(Vertex(verts[1], glm::normalize(verts[1]), coords[1]));
+			vertexBuffer.push_back(Vertex(verts[2], glm::normalize(verts[2]), coords[2]));
+			vertexBuffer.push_back(Vertex(verts[3], glm::normalize(verts[3]), coords[3]));
 
 			indexBuffer.push_back(ind + 0);
 			indexBuffer.push_back(ind + 1);

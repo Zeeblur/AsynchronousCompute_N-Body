@@ -1,0 +1,72 @@
+#version 450
+
+#extension GL_ARB_separate_shader_objects : enable
+#extension GL_ARB_shading_language_420pack : enable
+
+struct particle
+{
+	vec4 pos;								// Particle position
+	vec4 vel;								// Particle velocity
+};
+
+// Binding 0 : Position storage buffer
+layout(std140, binding = 0) buffer Pos 
+{
+   particle particles[ ];
+};
+
+layout (binding = 1) uniform UBO 
+{
+	float deltaT;
+	float destX;
+	float destY;
+	int particleCount;
+} ubo;
+
+layout (constant_id = 0) const int SHARED_DATA_SIZE = 512;
+layout (constant_id = 1) const float GRAVITY = 0.02;
+layout (constant_id = 2) const float POWER = 0.75;
+layout (constant_id = 3) const float SOFTEN = 0.0075;
+
+void main() 
+{
+    // Current SSBO index
+    uint index = gl_GlobalInvocationID.x;
+	// Don't try to write beyond particle count
+    if (index >= ubo.particleCount) 
+		return;	
+
+    // Read position and velocity
+    vec3 vVel = particles[index].vel.xyz;
+    vec3 vPos = particles[index].pos.xyz;
+
+	// calculate acceleration
+	vec3 acceleration = vec3(0.0);
+
+
+
+	// for each particle calculate force
+	for (int i = 0; i < ubo.particleCount; i++)
+	{
+		if (index == i)
+			continue;
+
+		vec3 dist = particles[i].pos.xyz - particles[index].pos.xyz;
+		vec3 direction = normalize(dist);
+
+		//float mass = particles[i].mass * particles[index].mass;
+		acceleration += direction * GRAVITY / pow(dot(dist, dist) + SOFTEN, POWER);
+	}
+
+	float deltaT = max(0, ubo.deltaT);
+	vVel += (deltaT * acceleration);
+
+
+    vPos += vVel * deltaT;
+
+
+    // Write back	
+    particles[index].pos.xyz = vPos;
+    particles[index].vel.xyz = vVel;
+}
+

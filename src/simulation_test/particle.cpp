@@ -1,7 +1,7 @@
 #include "particle.h"
 
 // structs to store vertex attributes
-Vertex::Vertex(glm::vec3 p, glm::vec3 c, glm::vec2 t) : pos(p), colour(c), texCoord(t) {}
+Vertex::Vertex(glm::vec3 p, glm::vec3 n, glm::vec2 t) : pos(p), normal(n), texCoord(t) {}
 
 // how to pass to vertex shader
 VkVertexInputBindingDescription Vertex::getBindingDescription()
@@ -28,13 +28,12 @@ std::array<VkVertexInputAttributeDescription, 3> Vertex::getAttributeDescription
 	attributeDesc[0].binding = 0; // which binding (the only one created above)
 	attributeDesc[0].location = 0; // which location of the vertex shader
 	attributeDesc[0].format = VK_FORMAT_R32G32B32_SFLOAT; // format as a vector 3 (3floats)
-	attributeDesc[0].offset = offsetof(Vertex, pos); // calculate the offset within each Vertex
-
-													 // as above but for colour
+	attributeDesc[0].offset = offsetof(Vertex, pos); // calculate the offset within each 
+													 // as above but for normals
 	attributeDesc[1].binding = 0;
 	attributeDesc[1].location = 1;
 	attributeDesc[1].format = VK_FORMAT_R32G32B32_SFLOAT; // format as a vector 3 (3floats)
-	attributeDesc[1].offset = offsetof(Vertex, colour);
+	attributeDesc[1].offset = offsetof(Vertex, normal);
 
 	// texture layout
 	attributeDesc[2].binding = 0;

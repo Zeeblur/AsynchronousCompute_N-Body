@@ -116,6 +116,10 @@ private:
 	VkDeviceMemory textureImageMemory;
 	VkImageView textureImageView;
 	VkSampler textureSampler;
+	VkImage textureImage_Normal;
+	VkDeviceMemory textureImageMemory_Normal;
+	VkImageView textureImageView_Normal;
+	VkSampler textureSampler_Normal;
 	VkImage depthImage;
 	VkDeviceMemory depthImageMemory;
 	VkImageView depthImageView;
@@ -235,6 +239,8 @@ private:
 	int secondsRan = 0;
 
 	bool amdGPU = false;
+
+	std::string Renderer::createFileString(int testNum);
 
 public:
 

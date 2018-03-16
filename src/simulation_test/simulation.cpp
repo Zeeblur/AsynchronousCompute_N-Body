@@ -138,7 +138,7 @@ void simulation::createDescriptorPool()
 	poolSize[1].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
 	poolSize[1].descriptorCount = 1;
 	poolSize[2].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-	poolSize[2].descriptorCount = 1;
+	poolSize[2].descriptorCount = 2;
 
 
 	VkDescriptorPoolCreateInfo poolInfo = {};

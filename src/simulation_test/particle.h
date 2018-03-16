@@ -10,10 +10,10 @@
 struct Vertex
 {
 	glm::vec3 pos;
-	glm::vec3 colour;
+	glm::vec3 normal;
 	glm::vec2 texCoord;
 
-	Vertex(glm::vec3 p, glm::vec3 c, glm::vec2 t);
+	Vertex(glm::vec3 p, glm::vec3 n, glm::vec2 t);
 
 	// how to pass to vertex shader
 	static VkVertexInputBindingDescription getBindingDescription();

@@ -12,7 +12,7 @@ int main(int argc, const char *argv[])
 	args::ValueFlag<int> particleCount(parser, "Particle Count", "Set the number of particles.", { 'p', "particles" });
 	args::ValueFlag<int> stackCount(parser, "Stack Count", "Set the number of stacks within the particle geometry", { 's', "st", "stacks" });
 	args::ValueFlag<int> sliceCount(parser, "Slice Count", "Set the number of slices within the particle geometry", { 'l', "sl", "slices" });
-	args::ValueFlag<int> dimensions(parser, "Scale", "Set the scale of the spheres", { 'x', "scales" });
+	args::ValueFlag<float> dimensions(parser, "Scale", "Set the scale of the spheres", { 'x', "scales" });
 
 
 	args::Group group2(parser, "What mode the simulation uses:", args::Group::Validators::Xor);
@@ -58,7 +58,7 @@ int main(int argc, const char *argv[])
 	if (stackCount) { simParam.stacks = args::get(stackCount); }
 	if (sliceCount) { simParam.slices = args::get(sliceCount); }
 	if (dimensions) { simParam.dims = glm::vec3(args::get(dimensions)); }
-	if (expTime) { simParam.totalTime = args::get(expTime); }
+	if (expTime) { simParam.totalTime = args::get(expTime) * 60; }
 	simParam.chosenMode = choice;
 
 	simParam.print();
