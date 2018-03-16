@@ -260,6 +260,8 @@ public:
 	VkDescriptorPool descriptorPool;
 	VkQueryPool renderQueryPool, computeQueryPool;
 
+	bool lighting; // flag for turning lighting equ on/off
+
 
 	inline static std::shared_ptr<Renderer> get()
 	{

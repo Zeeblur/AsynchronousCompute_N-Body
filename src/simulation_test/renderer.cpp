@@ -53,22 +53,24 @@ void Renderer::initVulkan(const MODE chosenMode, const bool AMD)
 	pickPhysicalDevice(AMD);
 	createLogicalDevice();
 	createSwapChain();
-	createImageViews();
-	createRenderPass();
-	createDescriptorSetLayout();
-	createGraphicsPipeline();
-	createCommandPool();
-	createDepthResources();
-	createFramebuffers();				// prepare
-	createTextureImage();
-	createTextureImageView();
-	createTextureSampler();
 }
 
 void Renderer::createConfig(const parameters& simParam)
 {
 	simulationParameters = &simParam;
 	PARTICLE_COUNT = simParam.pCount;
+	lighting = simParam.lighting;
+
+	createImageViews();
+	createRenderPass();
+	createDescriptorSetLayout();
+	createGraphicsPipeline();
+	createCommandPool();
+	createDepthResources();
+	createFramebuffers();
+	createTextureImage();
+	createTextureImageView();
+	createTextureSampler();
 
 	sim->createBufferObjects();
 
@@ -201,7 +203,7 @@ void Renderer::mainLoop()
 			// if gfx is first. Async if start of c overlaps g end,
 			if (results[C_START] < results[G_END])
 			{
-				std::cout << "ASYNCASYNCASYNC" << std::endl;
+				//std::cout << "ASYNCASYNCASYNC" << std::endl;
 				async = true;
 			}
 		}
@@ -211,7 +213,7 @@ void Renderer::mainLoop()
 			// if compute is first. Async if start of g overlaps c end,
 			if (results[G_START] < results[C_END])
 			{
-				std::cout << "ASYNCASYNCASYNC" << std::endl;
+				//std::cout << "ASYNCASYNCASYNC" << std::endl;
 				async = true;
 			}
 		}
@@ -270,6 +272,15 @@ void Renderer::cleanup()
 	vkDestroyImage(device, textureImage, nullptr);
 	vkFreeMemory(device, textureImageMemory, nullptr);
 
+	if (lighting)
+	{
+		vkDestroySampler(device, textureSampler_Normal, nullptr);
+		vkDestroyImageView(device, textureImageView_Normal, nullptr);
+
+		vkDestroyImage(device, textureImage_Normal, nullptr);
+		vkFreeMemory(device, textureImageMemory_Normal, nullptr);
+	}
+
 	vkDestroyDescriptorPool(device, descriptorPool, nullptr);
 	vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
 	vkDestroyBuffer(device, uniformBuffer, nullptr);
@@ -292,7 +303,7 @@ void Renderer::cleanup()
 	vkDestroySemaphore(device, renderFinishedSemaphore, nullptr);
 	vkDestroySemaphore(device, imageAvailableSemaphore, nullptr);
 
-	if (chosenSimMode == COMPUTE)
+	if (chosenSimMode != DOUBLE)
 		vkDestroyCommandPool(device, gfxCommandPool, nullptr);
 
 	vkDestroyDevice(device, nullptr);
@@ -759,15 +770,25 @@ void Renderer::createDescriptorSetLayout()
 	samplerLayoutBinding.pImmutableSamplers = nullptr;
 	samplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
-	VkDescriptorSetLayoutBinding samplerLayoutBindingNorm = {};
-	samplerLayoutBindingNorm.binding = 2;
-	samplerLayoutBindingNorm.descriptorCount = 1;
-	samplerLayoutBindingNorm.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-	samplerLayoutBindingNorm.pImmutableSamplers = nullptr;
-	samplerLayoutBindingNorm.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+	std::vector<VkDescriptorSetLayoutBinding> bindings;
 
-	// create info + create!
-	std::array<VkDescriptorSetLayoutBinding, 3> bindings = { uboLayoutBinding, samplerLayoutBinding, samplerLayoutBindingNorm };
+	// create info + create!  // default two 
+	bindings.push_back(uboLayoutBinding);
+	bindings.push_back(samplerLayoutBinding);
+
+	// if lighting need 2nd texture sampler
+	if (lighting)
+	{
+		VkDescriptorSetLayoutBinding samplerLayoutBindingNorm = {};
+		samplerLayoutBindingNorm.binding = 2;
+		samplerLayoutBindingNorm.descriptorCount = 1;
+		samplerLayoutBindingNorm.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		samplerLayoutBindingNorm.pImmutableSamplers = nullptr;
+		samplerLayoutBindingNorm.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+		bindings.push_back(samplerLayoutBindingNorm);
+	}
+
 	VkDescriptorSetLayoutCreateInfo layoutInfo = {};
 	layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
 	layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
@@ -780,9 +801,19 @@ void Renderer::createDescriptorSetLayout()
 // these need to be recreated with any shader change etc.
 void Renderer::createGraphicsPipeline()
 {
+	std::string vert = "vert";
+	std::string frag = "frag";
+
 	// read in shader files.
-	auto vertShaderCode = readFile("res/shaders/vert.spv");
-	auto fragShaderCode = readFile("res/shaders/frag.spv");
+	if (lighting)
+	{
+		// use phong shaders
+		vert += "_phong";
+		frag += "_phong";
+	}
+
+	auto vertShaderCode = readFile("res/shaders/" + vert + ".spv");
+	auto fragShaderCode = readFile("res/shaders/" + frag + ".spv");
 
 	// modules only needed in creation of pipeline so can be destroyed locally
 	VkShaderModule vertShaderMod;
@@ -1214,7 +1245,29 @@ void Renderer::createDescriptorSet()
 	imageInfo.imageView = textureImageView;
 	imageInfo.sampler = textureSampler;
 
-	std::array<VkWriteDescriptorSet, 3> descriptorWrites = {};
+	std::vector<VkWriteDescriptorSet> descriptorWrites = {};
+
+	if (lighting)
+	{
+		descriptorWrites.resize(3);
+
+		VkDescriptorImageInfo imageInfo2 = {};
+		imageInfo2.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		imageInfo2.imageView = textureImageView_Normal;
+		imageInfo2.sampler = textureSampler_Normal;
+
+		descriptorWrites[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		descriptorWrites[2].dstSet = gfxDescriptorSet;
+		descriptorWrites[2].dstBinding = 2;
+		descriptorWrites[2].dstArrayElement = 0;
+		descriptorWrites[2].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		descriptorWrites[2].descriptorCount = 1;
+		descriptorWrites[2].pImageInfo = &imageInfo2;
+	}
+	else
+	{
+		descriptorWrites.resize(2);
+	}
 
 	// descriptions are updated using UpdateSets... Takes in a write set
 	descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -1232,20 +1285,7 @@ void Renderer::createDescriptorSet()
 	descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 	descriptorWrites[1].descriptorCount = 1;
 	descriptorWrites[1].pImageInfo = &imageInfo;
-
-	VkDescriptorImageInfo imageInfo2 = {};
-	imageInfo2.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-	imageInfo2.imageView = textureImageView_Normal;
-	imageInfo2.sampler = textureSampler_Normal;
-
-	descriptorWrites[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-	descriptorWrites[2].dstSet = gfxDescriptorSet;
-	descriptorWrites[2].dstBinding = 2;
-	descriptorWrites[2].dstArrayElement = 0;
-	descriptorWrites[2].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-	descriptorWrites[2].descriptorCount = 1;
-	descriptorWrites[2].pImageInfo = &imageInfo2;
-
+	
 	vkUpdateDescriptorSets(device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
 }
 
@@ -1381,6 +1421,7 @@ void Renderer::createTextureImage()
 	vkFreeMemory(device, stagingBufferMemory, nullptr);
 
 	// create Normal Map
+	if (lighting)
 	{
 		int texWidth, texHeight, texChannels;
 		stbi_uc* pixels = stbi_load("res/textures/Tiles_010_NORM.jpg", &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
@@ -1415,7 +1456,11 @@ void Renderer::createTextureImage()
 void Renderer::createTextureImageView()
 {
 	textureImageView = createImageView(textureImage, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_ASPECT_COLOR_BIT);
-	textureImageView_Normal = createImageView(textureImage_Normal, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_ASPECT_COLOR_BIT);
+
+	if (lighting)
+	{
+		textureImageView_Normal = createImageView(textureImage_Normal, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_ASPECT_COLOR_BIT);
+	}
 }
 
 void Renderer::createTextureSampler()
@@ -1439,8 +1484,10 @@ void Renderer::createTextureSampler()
 		throw std::runtime_error("failed to create texture sampler!");
 	}
 
-	if (vkCreateSampler(device, &samplerInfo, nullptr, &textureSampler_Normal) != VK_SUCCESS) {
-		throw std::runtime_error("failed to create texture sampler!");
+	if (lighting)
+	{
+		if (vkCreateSampler(device, &samplerInfo, nullptr, &textureSampler_Normal) != VK_SUCCESS)
+			throw std::runtime_error("failed to create texture sampler!");
 	}
 }
 

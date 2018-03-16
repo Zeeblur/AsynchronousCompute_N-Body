@@ -10,8 +10,7 @@ int main(int argc, const char *argv[])
 	args::Flag amd(group, "AMD", "Use an AMD GPU", { 'a', "amd" });
 	args::Flag nvidia(group, "NVIDIA", "Use a NVIDIA GPU", { 'n', "nvidia" });
 	args::ValueFlag<int> particleCount(parser, "Particle Count", "Set the number of particles.", { 'p', "particles" });
-	args::ValueFlag<int> stackCount(parser, "Stack Count", "Set the number of stacks within the particle geometry", { 's', "st", "stacks" });
-	args::ValueFlag<int> sliceCount(parser, "Slice Count", "Set the number of slices within the particle geometry", { 'l', "sl", "slices" });
+	args::ValueFlag<int> stackCount(parser, "Stack & Slice Count", "Set the number of stacks within the particle geometry", { 's', "ss", "stacks", "slices" });
 	args::ValueFlag<float> dimensions(parser, "Scale", "Set the scale of the spheres", { 'x', "scales" });
 
 
@@ -21,6 +20,8 @@ int main(int argc, const char *argv[])
 	args::Flag mode3(group2, "Async Double Buffer", "Run the simulation using Asynchronous Compute - Double Buffering", { 'd', "double" });
 
 	args::ValueFlag<int> expTime(parser, "Experiment Time", "Set how long in MINUTES to run the experiment for.", { 'm', "minutes", });
+
+	args::Flag lighting(parser, "Lighting Flag", "Run the simulation with lighting.", { 'l', "lighting", });
 
 	args::CompletionFlag completion(parser, { "complete" });
 	try
@@ -55,11 +56,19 @@ int main(int argc, const char *argv[])
 	MODE choice = mode1 ? COMPUTE : mode2 ? TRANSFER : DOUBLE;
 
 	if (particleCount){	simParam.pCount = args::get(particleCount); }
-	if (stackCount) { simParam.stacks = args::get(stackCount); }
-	if (sliceCount) { simParam.slices = args::get(sliceCount); }
+
+	// use same value for both stacks and slices
+	if (stackCount)
+	{
+		simParam.stacks = args::get(stackCount);
+		simParam.slices = args::get(stackCount);
+	}
+
 	if (dimensions) { simParam.dims = glm::vec3(args::get(dimensions)); }
 	if (expTime) { simParam.totalTime = args::get(expTime) * 60; }
 	simParam.chosenMode = choice;
+
+	if (lighting) {	simParam.lighting = true; }
 
 	simParam.print();
 	

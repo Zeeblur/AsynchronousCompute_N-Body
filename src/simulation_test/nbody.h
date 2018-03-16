@@ -23,6 +23,7 @@ extern struct parameters
 	uint32_t stacks = 20;
 	uint32_t slices = 20;
 	glm::vec3 dims = glm::vec3(0.02f);
+	bool lighting = false;
 	MODE chosenMode;
 
 	char *modeTypes[3] =
@@ -39,6 +40,7 @@ extern struct parameters
 		std::cout << "Particle count: " << pCount << std::endl;
 		std::cout << "Stacks: " << stacks << std::endl;
 		std::cout << "Slices: " << slices << std::endl;
+		std::cout << "Lighting: " << (lighting ? "On" : "Off") << std::endl;
 	}
 };
 

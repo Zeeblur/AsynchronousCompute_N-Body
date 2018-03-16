@@ -269,6 +269,6 @@ void trans_simulation::dispatchCompute()
 
 void trans_simulation::cleanup()
 {
-	compute->cleanup(device);
 	vkDestroyCommandPool(device, transferPool, nullptr);
+	compute->cleanup(device);
 }
