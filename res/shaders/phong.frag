@@ -57,9 +57,6 @@ void main()
 	// calculate phong lighting
 	vec4 ambient = diffuse_reflection * ambient_intensity;
 	
-	float dotD = dot(normal, light_dir);
-	float k = max(dotD, 0);
-	vec4 diffuse = diffuse_reflection * light_colour * k;
 
 	// Calculate view direction
 	vec3 view_dir = normalize(-position);
@@ -69,8 +66,12 @@ void main()
 	vec3 samp_norm = texture(normalSampler, fragTexCoord).xyz;
 	vec3 transN = calc_normal(normal, tangent, binormal, samp_norm, fragTexCoord);
 	
-	float dotS = dot(halfV, normalize(transN));
+	float dotS = dot(halfV, transN);
 	float kSpec = max(dotS, 0);
+	
+	float dotD = dot(transN, light_dir);
+	float k = max(dotD, 0);
+	vec4 diffuse = diffuse_reflection * light_colour * k;
 	
 	vec4 specular = specular_reflection * light_colour * pow(kSpec, shininess);
 
@@ -79,8 +80,8 @@ void main()
 	outColor = texture(texSampler, fragTexCoord);
 	outColor *= primary;
 	outColor += specular;
+	
+	//outColor = vec4(transN, 1.0);
 
-	//outColor = texture(texSampler, fragTexCoord);
-
-	outColor.a = 0.7;
+	outColor.a = 1.0;
 }

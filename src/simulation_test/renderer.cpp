@@ -1251,10 +1251,10 @@ void Renderer::createDescriptorSet()
 	{
 		descriptorWrites.resize(3);
 
-		VkDescriptorImageInfo imageInfo2 = {};
-		imageInfo2.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-		imageInfo2.imageView = textureImageView_Normal;
-		imageInfo2.sampler = textureSampler_Normal;
+		VkDescriptorImageInfo* imageInfo2 =  new VkDescriptorImageInfo();
+		imageInfo2->imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		imageInfo2->imageView = textureImageView_Normal;
+		imageInfo2->sampler = textureSampler_Normal;
 
 		descriptorWrites[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 		descriptorWrites[2].dstSet = gfxDescriptorSet;
@@ -1262,7 +1262,7 @@ void Renderer::createDescriptorSet()
 		descriptorWrites[2].dstArrayElement = 0;
 		descriptorWrites[2].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 		descriptorWrites[2].descriptorCount = 1;
-		descriptorWrites[2].pImageInfo = &imageInfo2;
+		descriptorWrites[2].pImageInfo = imageInfo2;
 	}
 	else
 	{
