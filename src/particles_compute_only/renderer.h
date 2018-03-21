@@ -12,8 +12,14 @@
 #include <algorithm>
 #include <fstream>
 #include <array>
+#include <memory>
+#include "particle.h"
+#include "buffer.h"
+#include <chrono>
 
+using namespace std::chrono;
 
+struct Vertex;
 
 // if debugging - do INSTANCE validation layers
 #ifdef NDEBUG
@@ -56,9 +62,11 @@ static std::vector<char> readFile(const std::string& filename)
 struct QueueFamilyIndices {
 	int graphicsFamily = -1;
 	int presentFamily = -1;
+	int computeFamily = -1;
 
+	// check if families are complete. gfx compute present
 	bool isComplete() {
-		return graphicsFamily >= 0 && presentFamily >= 0;
+		return graphicsFamily >= 0 && presentFamily >= 0 && computeFamily >= 0;
 	}
 };
 
@@ -69,84 +77,12 @@ struct SwapChainSupportDetails {
 	std::vector<VkPresentModeKHR> presentModes;
 };
 
+struct BufferObject; // forward declare
 
-// structs to store vertex attributes
-struct Vertex
-{
-	glm::vec3 pos;
-	glm::vec3 colour;
-	glm::vec2 texCoord;
+// Resources for the compute part of the example
+struct ComputeConfig;
 
-	// how to pass to vertex shader
-	static VkVertexInputBindingDescription getBindingDescription()
-	{
-		VkVertexInputBindingDescription bindingDescription = {};
-
-		// 1 binding as all data is in 1 array. binding is index.
-		// stride is bytes between entries (in this case 1 whole vertex struct)
-		// move to the next data entry after each vertex (not instanced rendering)
-		bindingDescription.binding = 0;
-		bindingDescription.stride = sizeof(Vertex);
-		bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
-
-
-		return bindingDescription;
-	}
-
-	// get attribute descriptions...
-	static std::array<VkVertexInputAttributeDescription, 3> getAttributeDescription()
-	{
-		// 2 attributes (position and colour) so two description structs
-		std::array<VkVertexInputAttributeDescription, 3> attributeDesc = {};
-
-		attributeDesc[0].binding = 0; // which binding (the only one created above)
-		attributeDesc[0].location = 0; // which location of the vertex shader
-		attributeDesc[0].format = VK_FORMAT_R32G32B32_SFLOAT; // format as a vector 3 (3floats)
-		attributeDesc[0].offset = offsetof(Vertex, pos); // calculate the offset within each Vertex
-
-		// as above but for colour
-		attributeDesc[1].binding = 0; 
-		attributeDesc[1].location = 1;
-		attributeDesc[1].format = VK_FORMAT_R32G32B32_SFLOAT; // format as a vector 3 (3floats)
-		attributeDesc[1].offset = offsetof(Vertex, colour); 
-		 
-		// texture layout
-		attributeDesc[2].binding = 0;
-		attributeDesc[2].location = 2;
-		attributeDesc[2].format = VK_FORMAT_R32G32_SFLOAT;
-		attributeDesc[2].offset = offsetof(Vertex, texCoord);
-
-		return attributeDesc;
-	}
-};
-
-
-// hard code some data (interleaving vertex attributes)
-const std::vector<Vertex> vertices = {
-	{ { -0.5f, -0.5f, 0.0f },{ 1.0f, 0.0f, 0.0f },{ 1.0f, 0.0f } },
-	{ { 0.5f, -0.5f, 0.0f },{ 0.0f, 1.0f, 0.0f },{ 0.0f, 0.0f } },
-	{ { 0.5f, 0.5f, 0.0f },{ 0.0f, 0.0f, 1.0f },{ 0.0f, 1.0f } },
-	{ { -0.5f, 0.5f, 0.0f },{ 1.0f, 1.0f, 1.0f },{ 1.0f, 1.0f } },
-
-	{ { -0.5f, -0.5f, -0.5f },{ 1.0f, 0.0f, 0.0f },{ 1.0f, 0.0f } },
-	{ { 0.5f, -0.5f, -0.5f },{ 0.0f, 1.0f, 0.0f },{ 0.0f, 0.0f } },
-	{ { 0.5f, 0.5f, -0.5f },{ 0.0f, 0.0f, 1.0f },{ 0.0f, 1.0f } },
-	{ { -0.5f, 0.5f, -0.5f },{ 1.0f, 1.0f, 1.0f },{ 1.0f, 1.0f } }
-};
-
-const std::vector<uint16_t> indices = {
-	0, 1, 2, 2, 3, 0,
-	4, 5, 6, 6, 7, 4
-};
-
-struct UniformBufferObject
-{
-	glm::mat4 model;
-	glm::mat4 view;
-	glm::mat4 proj;
-};
-
-class Application
+class Renderer
 {
 private:
 	GLFWwindow* window;
@@ -167,10 +103,41 @@ private:
 	VkCommandPool gfxCommandPool;
 	VkSemaphore imageAvailableSemaphore;
 	VkSemaphore renderFinishedSemaphore;
-	VkBuffer vertexBuffer;
-	VkDeviceMemory vertexBufferMemory;
-	VkBuffer indexBuffer;
-	VkDeviceMemory indexBufferMemory;
+
+	time_point<system_clock> currentTime;
+	VkPipelineCache pipeCache;
+
+	struct ComputeConfig
+	{
+		BufferObject* storageBuffer;					// (Shader) storage buffer object containing the particles
+		VkBuffer uniformBuffer;		    // Uniform buffer object containing particle system parameters
+		VkQueue queue;								// Separate queue for compute commands (queue family may differ from the one used for graphics)
+		VkCommandPool commandPool;					// Use a separate command pool (queue family may differ from the one used for graphics)
+		VkCommandBuffer commandBuffer;				// Command buffer storing the dispatch commands and barriers
+		VkFence fence;								// Synchronization fence to avoid rewriting compute CB if still in use
+		VkDescriptorSetLayout descriptorSetLayout;	// Compute shader binding layout
+		VkDescriptorSet descriptorSet;				// Compute shader bindings
+		VkPipelineLayout pipelineLayout;			// Layout of the compute pipeline
+		VkPipeline pipeline;						// Compute pipeline for updating particle positions
+
+
+
+		// memory for ubo
+		VkDeviceMemory uboMem;
+		void* mapped = nullptr;
+													// Compute shader uniform block object
+		struct computeUBO
+		{
+			float deltaT;							//		Frame delta time
+			float destX;							//		x position of the attractor
+			float destY;							//		y position of the attractor
+			int32_t particleCount = 0;
+		} ubo;
+	} compute;
+
+	void createComputeUBO();
+	void updateCompute();
+
 	VkBuffer uniformBuffer;
 	VkDeviceMemory uniformBufferMemory;
 	VkDescriptorPool descriptorPool;
@@ -188,9 +155,18 @@ private:
 	std::vector<VkFramebuffer> swapChainFramebuffers;
 	std::vector<VkCommandBuffer> commandBuffers;
 
+	// to hold the indicies of the queue families
+	struct
+	{
+		uint32_t graphics;
+		uint32_t compute;
+		uint32_t present;
+	} queueFamilyIndices;
+
+
 	void initWindow();
 	void initVulkan();
-	void mainLoop();
+
 	void cleanup();
 	void cleanupSwapChain();
 	 
@@ -200,7 +176,7 @@ private:
 	{
 		if (width == 0 || height == 0) return;
 
-		Application* app = reinterpret_cast<Application*>(glfwGetWindowUserPointer(window));
+		Renderer* app = reinterpret_cast<Renderer*>(glfwGetWindowUserPointer(window));
 		app->recreateSwapChain();
 	}
 
@@ -217,16 +193,15 @@ private:
 	void createGraphicsPipeline();
 	void createFramebuffers();
 	void createCommandPool();
+	void createInstanceBuffer();
 
 	// texture stuff
 	void createTextureImage();
 	void createImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory);
-	VkCommandBuffer beginSingleTimeCommands();
-	void endSingleTimeCommands(VkCommandBuffer commandBuffer);
 	void transitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout);
 	void copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
 	void createTextureImageView();
-	VkImageView Application::createImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags);
+	VkImageView createImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags);
 	void createTextureSampler();
 
 	// depth buffer
@@ -234,26 +209,25 @@ private:
 	VkFormat findDepthFormat();
 	VkFormat findSupportedFormat(const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features);
 	
+	BufferObject* buffers[3];//  { new VertexBO(), new IndexBO(), new InstanceBO(); };
 
-	// TODO: SHOULDN'T ALLOCATE MEMORY FOR EVERY OBJECT INDIVIDUALLY - NEED TO IMPLEMENT ALLOCATOR
-	void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
-	void copyBuffer(VkBuffer srcBuff, VkBuffer targetBuff, VkDeviceSize size);
 	void createVertexBuffer();
 	void createIndexBuffer();
-	void createUniformBuffer(); // NOT MOST EFFICIENT WAY TODO: CHANGE TO PUSH CONSTANTS
+	void createUniformBuffer();
 	void createDescriptorPool();
 	void createDescriptorSet();
 
 	void createCommandBuffers();
+	void buildComputeCommandBuffer();
 	void createSemaphores();
 
 	void drawFrame();
+	void dispatchCompute();
 	void updateUniformBuffer();
-
 
 	// checks
 	bool checkValidationLayerSupport();
-	std::vector<const char*> Application::getExtensions();
+	std::vector<const char*> Renderer::getExtensions();
 	bool checkDeviceExtensionSupport(VkPhysicalDevice device);
 
 	bool isDeviceSuitable(VkPhysicalDevice device);
@@ -263,6 +237,7 @@ private:
 
 	// find queues
 	QueueFamilyIndices findQueuesFamilies(VkPhysicalDevice device);
+	int findComputeQueueFamily(VkPhysicalDevice device);
 
 	SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice device);
 	VkSurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats);
@@ -293,16 +268,46 @@ private:
 		VkDebugReportCallbackEXT callback,
 		const VkAllocationCallbacks* pAllocator);
 
-
 	const int WIDTH = 800;
 	const int HEIGHT = 600;
 
+	void prepareCompute();
+
+	// timer vars
+	uint32_t frameCounter, lastFPS;
+	float frameTimer = 0;
+	float fpsTimer = 0;
+
 public:
-	void run()
+
+	inline static std::shared_ptr<Renderer> get()
+	{
+		static std::shared_ptr<Renderer> instance(new Renderer());
+		return instance;
+	}
+
+	void init()
 	{
 		initWindow();
 		initVulkan();
-		mainLoop();
+	}
+
+	void mainLoop();
+
+	void setVertexData(const std::vector<Vertex> vert, const std::vector<uint16_t> ind, const std::vector<particle> part);
+	void createConfig(int pCount);
+	int PARTICLE_COUNT = 0;
+
+	// buffer creation & copy functions
+	void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
+	void copyBuffer(VkBuffer srcBuff, VkBuffer targetBuff, VkDeviceSize size);
+
+	// command queue for recording & submitting copies
+	VkCommandBuffer beginSingleTimeCommands();
+	void endSingleTimeCommands(VkCommandBuffer commandBuffer);
+
+	void clean()
+	{
 		cleanup();
 	}
 };

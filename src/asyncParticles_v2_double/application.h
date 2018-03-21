@@ -60,9 +60,11 @@ static std::vector<char> readFile(const std::string& filename)
 struct QueueFamilyIndices {
 	int graphicsFamily = -1;
 	int presentFamily = -1;
+	int computeFamily = -1;
 
+	// check if families are complete. gfx compute present
 	bool isComplete() {
-		return graphicsFamily >= 0 && presentFamily >= 0;
+		return graphicsFamily >= 0 && presentFamily >= 0 && computeFamily >= 0;
 	}
 };
 
@@ -163,12 +165,19 @@ private:
 	VkDescriptorSetLayout descriptorSetLayout;
 	VkPipelineLayout pipelineLayout;
 	VkPipeline graphicsPipeline;
-	VkCommandPool commandPool;
+	VkCommandPool gfxCommandPool;
 	VkSemaphore imageAvailableSemaphore;
 	VkSemaphore renderFinishedSemaphore;
 
+	VkFence graphicsFence;
+
+	uint32_t bufferIndex = 0;
+
 	time_point<system_clock> currentTime;
 	VkPipelineCache pipeCache;
+
+	// draw (get image from swapchain, submit command buffer, present)
+	void draw(); 
 
 	struct ComputeConfig
 	{
@@ -176,10 +185,11 @@ private:
 		VkBuffer uniformBuffer;		    // Uniform buffer object containing particle system parameters
 		VkQueue queue;								// Separate queue for compute commands (queue family may differ from the one used for graphics)
 		VkCommandPool commandPool;					// Use a separate command pool (queue family may differ from the one used for graphics)
-		VkCommandBuffer commandBuffer;				// Command buffer storing the dispatch commands and barriers
+		VkCommandBuffer commandBuffer[2];			// 2 Command buffer storing the dispatch commands and barriers
 		VkFence fence;								// Synchronization fence to avoid rewriting compute CB if still in use
 		VkDescriptorSetLayout descriptorSetLayout;	// Compute shader binding layout
-		VkDescriptorSet descriptorSet;				// Compute shader bindings
+		VkDescriptorSet descriptorSet[2];				// Compute shader bindings (FOR 1 AND 2)!!!!!
+
 		VkPipelineLayout pipelineLayout;			// Layout of the compute pipeline
 		VkPipeline pipeline;						// Compute pipeline for updating particle positions
 
@@ -216,7 +226,9 @@ private:
 	std::vector<VkImage> swapChainImages;
 	std::vector<VkImageView> swapChainImageViews;
 	std::vector<VkFramebuffer> swapChainFramebuffers;
-	std::vector<VkCommandBuffer> commandBuffers;
+	VkCommandBuffer commandBuffers[2];
+
+	//VkCommandBuffer gfxCommandBuffers[2];
 
 	// to hold the indicies of the queue families
 	struct
@@ -234,6 +246,8 @@ private:
 	void cleanupSwapChain();
 	 
 	void recreateSwapChain();
+
+	void waitOnFence(VkFence& fence);
 
 	static void onWindowResized(GLFWwindow* window, int width, int height)
 	{
@@ -284,8 +298,8 @@ private:
 	void createDescriptorPool();
 	void createDescriptorSet();
 
-	void createCommandBuffers();
-	void buildComputeCommandBuffer();
+	void createCommandBuffers(int frame);
+	void buildComputeCommandBuffer(int frame);
 	void createSemaphores();
 
 	void drawFrame();
@@ -342,6 +356,7 @@ private:
 
 	// get memory back and count
 	void * returnParticles;
+	void * returnParicles2;
 
 	// timer vars
 	uint32_t frameCounter, lastFPS;
@@ -382,24 +397,31 @@ public:
 struct BufferObject
 {
 	VkDevice* dev;
-	VkBuffer buffer = VK_NULL_HANDLE;
-	VkDeviceMemory memory = VK_NULL_HANDLE;
+
+	std::vector<VkBuffer> buffers;
+	std::vector<VkDeviceMemory> memory;
 	size_t size = 0;
 
 	virtual void createBuffer() = 0;
 
 	~BufferObject()
 	{
-		vkDestroyBuffer(*dev, buffer, nullptr);
-		vkFreeMemory(*dev, memory, nullptr);
+		for (int i = 0; i < buffers.size(); i++)
+		{
+			vkDestroyBuffer(*dev, buffers[i], nullptr);
+			vkFreeMemory(*dev, memory[i], nullptr);
+		}
 	}
 };
+
 
 struct VertexBO : BufferObject
 {
 	std::vector<Vertex> vertices;
 	void createBuffer()
 	{
+		buffers.resize(1);
+		memory.resize(1);
 		VkDeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
 		size = (size_t)bufferSize;
 
@@ -421,10 +443,10 @@ struct VertexBO : BufferObject
 		vkUnmapMemory(*dev, stagingBufferMemory);
 
 		// create vertex buffer
-		Application::get()->createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, buffer, memory);
+		Application::get()->createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, buffers[0], memory[0]);
 
 		// local so can't use map., so have to copy data between buffers.
-		Application::get()->copyBuffer(stagingBuffer, buffer, bufferSize);
+		Application::get()->copyBuffer(stagingBuffer, buffers[0], bufferSize);
 
 		// clean up staging buffer
 		vkDestroyBuffer(*dev, stagingBuffer, nullptr);
@@ -438,7 +460,8 @@ struct IndexBO : BufferObject
 
 	void createBuffer()
 	{
-
+		buffers.resize(1);
+		memory.resize(1);
 		// buffersize is the number of incides times the size of the index type (unit32/16)
 		VkDeviceSize bufferSize = sizeof(indices[0]) * indices.size();
 		size = indices.size();
@@ -453,9 +476,9 @@ struct IndexBO : BufferObject
 		vkUnmapMemory(*dev, stagingBufferMemory);
 
 		// note usage is INDEX buffer. 
-		Application::get()->createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, buffer, memory);
+		Application::get()->createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, buffers[0], memory[0]);
 
-		Application::get()->copyBuffer(stagingBuffer, buffer, bufferSize);
+		Application::get()->copyBuffer(stagingBuffer, buffers[0], bufferSize);
 		 
 		vkDestroyBuffer(*dev, stagingBuffer, nullptr);
 		vkFreeMemory(*dev, stagingBufferMemory, nullptr);
@@ -464,10 +487,14 @@ struct IndexBO : BufferObject
 
 struct InstanceBO : BufferObject
 {
+
+	// compute storageBuffer = buffer
 	std::vector<particle> particles;
+
 	void createBuffer()
 	{
-
+		buffers.resize(2);
+		memory.resize(2);
 		// buffersize is the number of incides times the size of the index type (unit32/16)
 		VkDeviceSize bufferSize = sizeof(particles[0]) * particles.size();
 		size = particles.size();
@@ -487,13 +514,51 @@ struct InstanceBO : BufferObject
 
 		// note usage is INDEX buffer. and storage for compute
 		Application::get()->createBuffer(bufferSize,
-			VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-			//  for getting data back VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+			//  for getting data back
+			//VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
 			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-			buffer,
-			memory); 
+			buffers[0],
+			memory[0]); 
 
-		Application::get()->copyBuffer(stagingBuffer, buffer, bufferSize);
+		Application::get()->copyBuffer(stagingBuffer, buffers[0], bufferSize);
+
+		vkDestroyBuffer(*dev, stagingBuffer, nullptr);
+		vkFreeMemory(*dev, stagingBufferMemory, nullptr); 
+	
+		// create draw storage buff (VERTEX)
+		createDrawStorage();
+	}
+
+	void createDrawStorage()
+	{
+		// buffersize is the number of incides times the size of the index type (unit32/16)
+		VkDeviceSize bufferSize = sizeof(particles[0]) * particles.size();
+		size = particles.size();
+
+		VkBuffer stagingBuffer;
+		VkDeviceMemory stagingBufferMemory;
+		Application::get()->createBuffer(bufferSize,
+			VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+			stagingBuffer,
+			stagingBufferMemory);
+
+		void* data;
+		vkMapMemory(*dev, stagingBufferMemory, 0, bufferSize, 0, &data);
+		memcpy(data, particles.data(), (size_t)bufferSize);
+		vkUnmapMemory(*dev, stagingBufferMemory);
+
+		// note usage is INDEX buffer. and storage for compute
+		Application::get()->createBuffer(bufferSize,
+			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+			//  for getting data back
+			//VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+			buffers[1],
+			memory[1]);
+
+		Application::get()->copyBuffer(stagingBuffer, buffers[1], bufferSize);
 
 		vkDestroyBuffer(*dev, stagingBuffer, nullptr);
 		vkFreeMemory(*dev, stagingBufferMemory, nullptr);

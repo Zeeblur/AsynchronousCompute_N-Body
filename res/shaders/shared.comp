@@ -28,8 +28,6 @@ layout (constant_id = 1) const float GRAVITY = 0.02;
 layout (constant_id = 2) const float POWER = 0.75;
 layout (constant_id = 3) const float SOFTEN = 0.0075;
 
-shared vec4 sharedData[SHARED_DATA_SIZE];
-
 void main() 
 {
     // Current SSBO index

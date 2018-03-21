@@ -5,14 +5,14 @@ using namespace glm;
 // TODO: define vars for window/particles etc
 nbody::nbody(const unsigned int num)
 {
-	// initialise the application
+	// initialise the Renderer
 	num_particles = num; 
 	initialiseVulkan();
 }
 
 void nbody::initialiseVulkan()
 {
-	auto &app = Application::get();
+	auto &app = Renderer::get();
 
 	app->init();
 
@@ -51,12 +51,12 @@ void nbody::run()
 	// loop here  
 	prepareParticles();     
 	createSphereGeom(20, 20, vec3(0.02f));
-	Application::get()->setVertexData(vertexBuffer, indexBuffer, particleBuffer);
+	Renderer::get()->setVertexData(vertexBuffer, indexBuffer, particleBuffer);
 
 	// create config sets up the storage buffers for the data and uniforms. 
 	// creates the descriptions and command buffers.
-	Application::get()->createConfig(num_particles);
-	Application::get()->mainLoop();
+	Renderer::get()->createConfig(num_particles);
+	Renderer::get()->mainLoop();
 }
 
 void nbody::createSphereGeom(const unsigned int stacks, const unsigned int slices, const glm::vec3 &dims)
@@ -134,5 +134,5 @@ void nbody::createSphereGeom(const unsigned int stacks, const unsigned int slice
 nbody::~nbody()
 {
 	// clean up app
-	Application::get()->clean();
+	Renderer::get()->clean();
 }
