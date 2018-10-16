@@ -171,7 +171,6 @@ void comp_simulation::recordComputeCommands()
 	vkEndCommandBuffer(compute->commandBuffer);
 }
 
-
 void comp_simulation::dispatchCompute()
 {
 	// wait until presentation is finished before drawing the next frame

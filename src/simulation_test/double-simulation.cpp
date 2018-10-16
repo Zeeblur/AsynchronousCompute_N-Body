@@ -179,7 +179,7 @@ void double_simulation::recordComputeCommand(int frame)
 
 	// bind pipeline & desc sets
 	vkCmdBindPipeline(comp->commandBuffer[frame], VK_PIPELINE_BIND_POINT_COMPUTE, comp->pipeline);
-
+	vkCmdBindDescriptorSets(comp->commandBuffer[frame], VK_PIPELINE_BIND_POINT_COMPUTE, comp->pipelineLayout, 0, 1, &comp->descriptorSet[1-frame], 0, nullptr);
 	vkCmdBindDescriptorSets(comp->commandBuffer[frame], VK_PIPELINE_BIND_POINT_COMPUTE, comp->pipelineLayout, 0, 1, &comp->descriptorSet[frame], 0, nullptr);
 	vkCmdResetQueryPool(comp->commandBuffer[frame], renderer->computeQueryPool, 0, 2);
 	vkCmdWriteTimestamp(comp->commandBuffer[frame], VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, renderer->computeQueryPool, 0);
