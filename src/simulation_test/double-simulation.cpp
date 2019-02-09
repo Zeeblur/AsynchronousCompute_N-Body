@@ -85,10 +85,6 @@ void double_simulation::createDescriptorSets()
 		bufferInfo.offset = 0;
 		bufferInfo.range = sizeof(particle) * buffers[INSTANCE]->size;  //  BUFFER SIZE FOR COMPUTE!
 
-		VkDescriptorBufferInfo UBI = {};
-		UBI.buffer = comp->uniformBuffer;
-		UBI.offset = 0;
-		UBI.range = sizeof(ComputeConfig::computeUBO);
 
 		// Binding 0 : Particle position storage buffer
 		VkWriteDescriptorSet storageDesc{};
@@ -98,6 +94,12 @@ void double_simulation::createDescriptorSets()
 		storageDesc.dstBinding = 0;
 		storageDesc.pBufferInfo = &bufferInfo;
 		storageDesc.descriptorCount = 1;
+
+		VkDescriptorBufferInfo UBI = {};
+		UBI.buffer = comp->uniformBuffer;
+		UBI.offset = 0;
+		UBI.range = sizeof(ComputeConfig::computeUBO);
+
 
 		// Binding 1 : Uniform buffer
 		VkWriteDescriptorSet uniformDesc{};
@@ -180,7 +182,11 @@ void double_simulation::recordComputeCommand(int frame)
 	// bind pipeline & desc sets
 	vkCmdBindPipeline(comp->commandBuffer[frame], VK_PIPELINE_BIND_POINT_COMPUTE, comp->pipeline);
 
-	vkCmdBindDescriptorSets(comp->commandBuffer[frame], VK_PIPELINE_BIND_POINT_COMPUTE, comp->pipelineLayout, 0, 1, &comp->descriptorSet[frame], 0, nullptr);
+	// get both desc sets
+
+	std::vector<VkDescriptorSet> descSets = { comp->descriptorSet[1 - frame], comp->descriptorSet[frame] };
+
+	vkCmdBindDescriptorSets(comp->commandBuffer[frame], VK_PIPELINE_BIND_POINT_COMPUTE, comp->pipelineLayout, 0, descSets.size(), descSets.data(), 0, nullptr);
 	vkCmdResetQueryPool(comp->commandBuffer[frame], renderer->computeQueryPool, 0, 2);
 	vkCmdWriteTimestamp(comp->commandBuffer[frame], VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, renderer->computeQueryPool, 0);
 	vkCmdDispatch(comp->commandBuffer[frame], renderer->PARTICLE_COUNT, 1, 1);
