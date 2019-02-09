@@ -165,7 +165,7 @@ void simulation::createDescriptorSets()
 	allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
 	allocInfo.descriptorPool = renderer->descriptorPool;
 	allocInfo.pSetLayouts = &compute->descriptorSetLayout;
-	allocInfo.descriptorSetCount = 1;
+	allocInfo.descriptorSetCount = 2;
 
 	// create allocation
 	if (vkAllocateDescriptorSets(device, &allocInfo, &compute->descriptorSet) != VK_SUCCESS)

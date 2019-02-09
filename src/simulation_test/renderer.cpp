@@ -1943,7 +1943,7 @@ void Renderer::prepareCompute()
 	uniformBinding.descriptorCount = 1;
 
 	std::vector<VkDescriptorSetLayoutBinding> setLayoutBindings{};
-	
+
 	// Binding 0 : Particle position storage buffer
 	setLayoutBindings.push_back(positionBinding);
 	// Binding 1 : Uniform buffer
@@ -1956,15 +1956,20 @@ void Renderer::prepareCompute()
 	descriptorLayout.pBindings = setLayoutBindings.data();
 	descriptorLayout.bindingCount = static_cast<uint32_t>(setLayoutBindings.size());
 
+	std::vector<VkDescriptorSetLayout> setlayouts = {};
+
 	// create descriptor layout
-	if(vkCreateDescriptorSetLayout(device, &descriptorLayout, nullptr, &compute->descriptorSetLayout) != VK_SUCCESS)
+	if (vkCreateDescriptorSetLayout(device, &descriptorLayout, nullptr, &compute->descriptorSetLayout) != VK_SUCCESS)
 		throw std::runtime_error("Failed to create compute desc layout");
+	
+	setlayouts.push_back(compute->descriptorSetLayout); // use same layout for both descriptor sets
+	setlayouts.push_back(compute->descriptorSetLayout);
 
 	// create pipeline layout 
 	VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo{};
 	pipelineLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-	pipelineLayoutCreateInfo.setLayoutCount = 1;
-	pipelineLayoutCreateInfo.pSetLayouts = &compute->descriptorSetLayout;
+	pipelineLayoutCreateInfo.setLayoutCount = setlayouts.size();
+	pipelineLayoutCreateInfo.pSetLayouts = setlayouts.data();
 
 	if(vkCreatePipelineLayout(device, &pipelineLayoutCreateInfo, nullptr, &compute->pipelineLayout) != VK_SUCCESS)
 		throw std::runtime_error("Failed to create compute pipeline");
