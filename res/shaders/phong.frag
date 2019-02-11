@@ -24,7 +24,7 @@ vec3 calc_normal(in vec3 normal, in vec3 tangent, in vec3 binormal, in vec3 samp
 	tangent = normalize(tangent);
 	binormal = normalize(binormal);
 	
-	sampled_normal = (2.0 * sampled_normal) - vec3(1.0, 1.0, 1.0);
+	//sampled_normal = (2.0 * sampled_normal) - vec3(1.0, 1.0, 1.0);
 	
 	// *******************
 	// Generate TBN matrix
@@ -48,40 +48,37 @@ void main()
 	vec4 light_colour = vec4(1.0);
 	vec3 light_dir = vec3(0, -1, 0);
 	
-	
 	vec4 emissive = vec4(0.0, 0.0, 0.0, 1.0);
 	vec4 diffuse_reflection = vec4(0.53, 0.45, 0.37, 1.0);
 	vec4 specular_reflection = vec4(1.0);
 	float shininess = 1.0;
 
-	// calculate phong lighting
-	vec4 ambient = diffuse_reflection * ambient_intensity;
-	
-
-	// Calculate view direction
-	vec3 view_dir = normalize(-position);
-	vec3 halfV = normalize(view_dir + light_dir);
-
-	// normal mapping
+	//
 	vec3 samp_norm = texture(normalSampler, fragTexCoord).xyz;
 	vec3 transN = calc_normal(normal, tangent, binormal, samp_norm, fragTexCoord);
-	
-	float dotS = dot(halfV, transN);
-	float kSpec = max(dotS, 0);
-	
+
+	// calculate phong lighting
+	vec4 ambient = diffuse_reflection * ambient_intensity;
+		
 	float dotD = dot(transN, light_dir);
 	float k = max(dotD, 0);
-	vec4 diffuse = diffuse_reflection * light_colour * k;
-	
-	vec4 specular = specular_reflection * light_colour * pow(kSpec, shininess);
 
+	vec4 diffuse = diffuse_reflection * light_colour * k;
+
+	// Calculate view direction
+	vec3 view_dir = normalize(vec3(0, 0, 0)-position);
+	vec3 halfV = normalize(view_dir + light_dir);
+
+	float dotS = dot(halfV, transN);
+	float kSpec = max(dotS, 0);
+
+	vec4 specular = specular_reflection * light_colour * pow(kSpec, shininess);
+	
 	vec4 primary = emissive + ambient + diffuse;
 
 	outColor = texture(texSampler, fragTexCoord);
 	outColor *= primary;
 	outColor += specular;
-	
-	//outColor = vec4(transN, 1.0);
 
 	outColor.a = 1.0;
 }
