@@ -10,6 +10,7 @@ include_directories ("${PROJECT_BINARY_DIR}")
 SET(OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
 SET (CMAKE_RUNTIME_OUTPUT_DIRECTORY ${OUTPUT_DIRECTORY})
 
+
 include(DownloadProject.cmake)
 
 # don't download glfw project shit
@@ -53,9 +54,6 @@ file(GLOB_RECURSE SOURCES src/triangle/*.cpp src/triangle/*.h external/*.h)
 
 add_executable(vulkantest ${SOURCES})
 target_link_libraries (vulkantest  ${EXTRA_LIBS})
-
-#add_custom_command(TARGET copyRes POST_BUILD
-#  COMMAND ${CMAKE_COMMAND} -E copy_directory   "${PROJECT_SOURCE_DIR}/res" "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/$<CONFIG>/res")
   
 target_link_libraries(vulkantest glfw)
 target_link_libraries(vulkantest vulkan-1)
@@ -105,7 +103,17 @@ target_link_libraries(simulation_test glfw)
 target_link_libraries(simulation_test vulkan-1)
 target_include_directories(simulation_test PRIVATE external/)
 
-#add_custom_command(TARGET asyncParticles POST_BUILD
- # COMMAND ${CMAKE_COMMAND} -E copy_directory   "${PROJECT_SOURCE_DIR}/res" "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/$<CONFIG>/res")
+
+# run shader compile and copy
+add_dependencies(simulation_test copy_res)
   
-add_custom_target(copy_res ALL COMMAND ${CMAKE_COMMAND} -E copy_directory "${PROJECT_SOURCE_DIR}/res" "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/$<CONFIG>/res") 
+add_custom_target(copy_res ALL
+COMMAND "${PROJECT_SOURCE_DIR}/res/shaders/shadercompile.bat" WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}/res/shaders"
+COMMAND ${CMAKE_COMMAND} -E copy_directory "${PROJECT_SOURCE_DIR}/res" "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/$<CONFIG>/res") 
+
+
+# set WORKING_DIRECTORY
+set_target_properties(simulation_test 
+    PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY
+    ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/$(Configuration)
+)

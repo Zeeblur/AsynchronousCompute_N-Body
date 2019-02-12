@@ -1,3 +1,4 @@
+dir
 C:/VulkanSDK/1.0.65.1/Bin/glslangValidator.exe -V phong.vert -o vert_phong.spv
 C:/VulkanSDK/1.0.65.1/Bin/glslangValidator.exe -V phong.frag -o frag_phong.spv
 C:/VulkanSDK/1.0.65.1/Bin/glslangValidator.exe -V multiple.vert 
