@@ -19,7 +19,7 @@ int main(int argc, const char *argv[])
 	args::Flag mode2(group2, "Async Transfer", "Run the simulation using Asynchronous Compute - Transfer Method", { 't', "transfer" });
 	args::Flag mode3(group2, "Async Double Buffer", "Run the simulation using Asynchronous Compute - Double Buffering", { 'd', "double" });
 
-	args::ValueFlag<int> expTime(parser, "Experiment Time", "Set how long in MINUTES to run the experiment for.", { 'm', "minutes", });
+	args::ValueFlag<float> expTime(parser, "Experiment Time", "Set how long in MINUTES to run the experiment for.", { 'm', "minutes", });
 
 	args::Flag lighting(parser, "Lighting Flag", "Run the simulation with lighting.", { 'l', "lighting", });
 

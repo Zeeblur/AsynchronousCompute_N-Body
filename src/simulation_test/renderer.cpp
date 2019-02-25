@@ -1661,6 +1661,14 @@ bool Renderer::isDeviceSuitable(VkPhysicalDevice device, const bool AMD)
 			printf("1080 Found - Skipping\n");
 			return false;
 		}
+
+		output = strstr(deviceProperties.deviceName, "RTX");
+		if (output)
+		{
+
+			printf("Quadro Found - Skipping\n");
+			return false;
+		}
 	}
 
 	// is this a discrete gpu and does it have geom capabilities 
