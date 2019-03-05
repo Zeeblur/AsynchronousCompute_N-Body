@@ -11,7 +11,7 @@ class DataSet(object):
 
     def __init__(self, myList):
         self.GPU = myList[0]
-        self.SimType = myList[1]
+        self.SimType = myList[1][1]
         self.Parameters = myList[2]
         self.Header = myList[3]
         # calculate averages
@@ -19,6 +19,7 @@ class DataSet(object):
         for i in range(4, len(myList), 1):
                 self.data.append(myList[i])
         self.averageData()
+        self.setParameters()
 
     def __str__(self):
         return str(self.Parameters)
@@ -57,9 +58,9 @@ class DataSet(object):
 
                 
     def setParameters(self):
-        self.particleCount = self.Parameters[1]
-        self.ssCount = self.Parameters[3]
-        self.scale = self.Parameters[7]
+        self.particleCount = int(self.Parameters[1])
+        self.ssCount = int(self.Parameters[3])
+        self.scale = float(self.Parameters[7])
         
                 
 data = []
@@ -72,12 +73,12 @@ tableFlag = True
 with open("tables.csv", 'r') as csvfile:
     reader = csv.reader(csvfile, delimiter=',')
     for row in reader :            
-        if len(row[0]) == 0 and tableFlag:
+        if len(row) == 0 and tableFlag:
             print ("Adding New Dataset")
             tableFlag = False
             count = count+1
             data.append([])
-        elif len(row[0]) > 0:
+        elif len(row) > 0:
            data[count].append(row)
            tableFlag = True
            #print ("adding row")
@@ -97,3 +98,30 @@ dataSets = []
 for d in data:
     if (len(d) > 0):
         dataSets.append(DataSet(d))
+
+#get all dataSets where ss is 20 an scale is 0.02
+particleChangeAMD = []
+particleChangeNVI = []
+for d in dataSets:
+    if (d.ssCount == 20 and d.scale == 0.02):
+        if (d.GPU[0] == 'A'):
+            particleChangeAMD.append(d)
+        else :
+            particleChangeNVI.append(d)    
+
+
+tableHeader = ["PCount", "Simulation"] + particleChangeAMD[0].Header
+
+tableData = []
+
+for d in particleChangeAMD:
+    data = [d.particleCount, d.SimType]
+    data = data + d.averages
+    tableData.append(data)
+
+
+# save results to file
+with open("results.csv", 'a', newline='') as myfile:
+        wr = csv.writer(myfile, quoting=csv.QUOTE_ALL)
+        wr.writerow(tableHeader)
+        wr.writerows(tableData)
