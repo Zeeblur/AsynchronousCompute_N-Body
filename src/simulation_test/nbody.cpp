@@ -111,10 +111,63 @@ void nbody::createSphereGeom(const unsigned int stacks, const unsigned int slice
 			}
 
 			//TODO: clean this up
-			vertexBuffer.push_back(Vertex(verts[0], glm::normalize(verts[0]), coords[0]));
-			vertexBuffer.push_back(Vertex(verts[1], glm::normalize(verts[1]), coords[1]));
-			vertexBuffer.push_back(Vertex(verts[2], glm::normalize(verts[2]), coords[2]));
-			vertexBuffer.push_back(Vertex(verts[3], glm::normalize(verts[3]), coords[3]));
+			auto v0 = Vertex(verts[0], glm::normalize(verts[0]), coords[0]);
+			auto v1 = Vertex(verts[1], glm::normalize(verts[1]), coords[1]);
+			auto v2 = Vertex(verts[2], glm::normalize(verts[2]), coords[2]);
+			auto v3 = Vertex(verts[3], glm::normalize(verts[3]), coords[3]);
+
+			std::vector<Vertex*> triangle1 = { &v0, &v1, &v2 };
+			std::vector<Vertex*> triangle2 = { &v1, &v3, &v2 };
+
+			std::map <Vertex*, std::vector<glm::vec3>> tangents;
+			std::map <Vertex*, std::vector<glm::vec3>> bitangents;
+
+			computeTangentBasis(triangle1, tangents, bitangents);
+			computeTangentBasis(triangle2, tangents, bitangents);
+
+			// average tangents for vertices with multiple triangles.
+			for (auto const& x : tangents)
+			{
+				auto key = x.first;
+				auto val = x.second;
+
+				auto size = val.size();
+
+				glm::vec3 average = glm::vec3(0.0);
+				for (int i = 0; i < size; ++i)
+				{
+					average += val[i];
+				}
+
+				average /= size;
+
+				key->tangent = average;
+
+			}
+
+			for (auto const& x : bitangents)
+			{
+				auto key = x.first;
+				auto val = x.second;
+
+				auto size = val.size();
+
+				glm::vec3 average = glm::vec3(0.0);
+				for (int i = 0; i < size; ++i)
+				{
+					average += val[i];
+				}
+
+				average /= size;
+
+				key->bitangent = average;
+
+			}
+
+			vertexBuffer.push_back(v0);
+			vertexBuffer.push_back(v1);
+			vertexBuffer.push_back(v2);
+			vertexBuffer.push_back(v3);
 
 			indexBuffer.push_back(ind + 0);
 			indexBuffer.push_back(ind + 1);
@@ -124,10 +177,66 @@ void nbody::createSphereGeom(const unsigned int stacks, const unsigned int slice
 			indexBuffer.push_back(ind + 2);
 
 			ind += 4;
+
+
 		}
 		t -= delta_T;
 	}
 
+}
+
+// calculate tangents and binormals per triangle
+void nbody::computeTangentBasis(std::vector<Vertex*> &triangleVertices, std::map <Vertex*, std::vector<glm::vec3>> &tangents, std::map <Vertex*, std::vector<glm::vec3>> &bitangents)
+{
+	auto v0 = triangleVertices[0];
+	auto v1 = triangleVertices[1];
+	auto v2 = triangleVertices[2];
+
+	// calculate edges of the triangle
+	glm::vec3 deltaPos1 = v1->pos - v0->pos;
+	glm::vec3 deltaPos2 = v2->pos - v0->pos;
+
+	// UV delta
+	glm::vec2 deltaUV1 = v1->texCoord - v0->texCoord;
+	glm::vec2 deltaUV2 = v2->texCoord - v0->texCoord;
+
+	float r = 1.0f / (deltaUV1.x * deltaUV2.y - deltaUV1.y * deltaUV2.x);
+	//glm::vec3 tangent = ((deltaPos1 * deltaUV2.y) - (deltaPos2 * deltaUV1.y))*r;
+
+
+	glm::vec3 tangent = glm::vec3((v1->pos.x * v2->texCoord.y - v2->pos.x * v1->texCoord.y) * r,
+		(v1->pos.y * v2->texCoord.y - v2->pos.y * v1->texCoord.y) * r,
+		(v1->pos.z * v2->texCoord.y - v2->pos.z * v1->texCoord.y) * r);
+
+	glm::vec3 bitangent = (deltaPos2 * deltaUV1.x - deltaPos1 * deltaUV2.x)*r;
+
+	// TODO:: this isn't working as already orthogonal
+	//for (auto &v : triangleVertices)
+	//{
+	//	const vec3& n = v->normal;
+	//	const vec3& t = tangent;
+
+	//	auto gramschmidt = t - (n * glm::dot(n, t));
+
+	//	// Gram-Schmidt orthogonalize
+	//	glm::vec3 calcTangent = glm::normalize(t - (n * glm::dot(n, t)));
+	//	assert(!glm::isnan(calcTangent.x));
+	//	// Calculate handedness
+	//	if (glm::dot(glm::cross(n, t), bitangent) < 0.0f)
+	//	{
+	//		calcTangent *= -1.0f;
+	//	}
+	//	assert(!glm::isnan(calcTangent.x));
+	//	v->tangents.push_back(calcTangent);
+	//	v->bitangents.push_back(bitangent);
+	//}
+
+
+	for (auto &v : triangleVertices)
+	{
+		tangents[v].push_back(normalize(tangent));
+		bitangents[v].push_back(normalize(bitangent));
+	}	
 }
 
 nbody::~nbody()

@@ -24,12 +24,14 @@ vec3 calc_normal(in vec3 normal, in vec3 tangent, in vec3 binormal, in vec3 samp
 	tangent = normalize(tangent);
 	binormal = normalize(binormal);
 	
-	//sampled_normal = (2.0 * sampled_normal) - vec3(1.0, 1.0, 1.0);
+	sampled_normal = (2.0 * sampled_normal) - vec3(1.0, 1.0, 1.0);
 	
 	// *******************
 	// Generate TBN matrix
 	// *******************
-	mat3 TBN = mat3(tangent.x, tangent.y, tangent.z, binormal.x, binormal.y, binormal.z, normal.x, normal.y, normal.z);
+
+
+	mat3 TBN = transpose(mat3(tangent.x, tangent.y, tangent.z, binormal.x, binormal.y, binormal.z, normal.x, normal.y, normal.z));
 	
 	// ****************************************
 	// Return sampled normal transformed by TBN
@@ -79,6 +81,8 @@ void main()
 	outColor = texture(texSampler, fragTexCoord);
 	outColor *= primary;
 	outColor += specular;
+
+	outColor = vec4(transN, 1.0);
 
 	outColor.a = 1.0;
 }

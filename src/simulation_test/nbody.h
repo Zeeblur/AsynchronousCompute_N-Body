@@ -8,6 +8,8 @@
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 
+#include <map>
+
 enum MODE
 {
 	COMPUTE,
@@ -57,7 +59,7 @@ class nbody
 	std::vector<uint16_t> indexBuffer;
 
 	void createSphereGeom(const unsigned int stacks, const unsigned int slices, const glm::vec3 dims);
-
+	void computeTangentBasis(std::vector<Vertex*> &triangleVertices, std::map <Vertex*, std::vector<glm::vec3>> &tangents, std::map <Vertex*, std::vector<glm::vec3>> &bitangents);
 
 public:
 

@@ -5,6 +5,7 @@
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 #include <array>
+#include <vector>
 
 // structs to store vertex attributes
 struct Vertex
@@ -12,6 +13,8 @@ struct Vertex
 	glm::vec3 pos;
 	glm::vec3 normal;
 	glm::vec2 texCoord;
+	glm::vec3 tangent;
+	glm::vec3 bitangent; 
 
 	Vertex(glm::vec3 p, glm::vec3 n, glm::vec2 t);
 
