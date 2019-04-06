@@ -22,9 +22,9 @@ void main()
 	// hard code lighting constants
 	vec4 ambient_intensity = vec4(0.1);
 	vec4 light_colour = vec4(1.0);
-	//vec3 light_dir = vec3(0, -1, 0);
+	vec3 light_dir = vec3(0, -1, 0); // camera space
 
-	vec3 light_dir = TBN * vec3(0, -1, 0); // tangent space
+	//vec3 light_dir = TBN * vec3(0, -1, 0); // tangent space
 	
 	vec4 emissive = vec4(0.0, 0.0, 0.0, 1.0);
 	vec4 diffuse_reflection = vec4(0.53, 0.45, 0.37, 1.0);
@@ -37,10 +37,9 @@ void main()
 	samp_norm = normalize((2.0 * samp_norm) - vec3(1.0));
 	
 	
-	vec3 transN = samp_norm; // in tangent space
-	transN = normalize(transN);
-
-
+	vec3 transN = normalize(samp_norm + normal);  // in tangent space
+	
+//	transN = TBN * samp_norm; // in cam space
 
 
 	// calculate phong lighting
@@ -52,7 +51,8 @@ void main()
 	vec4 diffuse = diffuse_reflection * light_colour * dotD;
 
 	// Calculate view direction
-	vec3 view_dir = TBN * normalize(vec3(0, 0, 0)-position); // tangent space
+	//vec3 view_dir = TBN * normalize(vec3(0, 0, 0)-position); // tangent space
+	vec3 view_dir = normalize(vec3(0, 0, 0)-position); // camera space
 	vec3 halfV = normalize(view_dir + light_dir);
 
 	float dotS = clamp(dot(halfV, transN), 0, 1);
@@ -66,7 +66,7 @@ void main()
 	outColor *= primary;
 //	outColor += specular;
 
-	//outColor = vec4(normal, 1.0);
+	//outColor = vec4(, 1.0);
 
 	outColor.a = 1.0;
 }
