@@ -20,10 +20,10 @@ VkVertexInputBindingDescription Vertex::getBindingDescription()
 }
 
 // get attribute descriptions...
-std::array<VkVertexInputAttributeDescription, 3> Vertex::getAttributeDescription()
+std::array<VkVertexInputAttributeDescription, 5> Vertex::getAttributeDescription()
 {
 	// 2 attributes (position and colour) so two description structs
-	std::array<VkVertexInputAttributeDescription, 3> attributeDesc = {};
+	std::array<VkVertexInputAttributeDescription, 5> attributeDesc = {};
 
 	attributeDesc[0].binding = 0; // which binding (the only one created above)
 	attributeDesc[0].location = 0; // which location of the vertex shader
@@ -38,8 +38,21 @@ std::array<VkVertexInputAttributeDescription, 3> Vertex::getAttributeDescription
 	// texture layout
 	attributeDesc[2].binding = 0;
 	attributeDesc[2].location = 2;
-	attributeDesc[2].format = VK_FORMAT_R32G32_SFLOAT;
+	attributeDesc[2].format = VK_FORMAT_R32G32_SFLOAT; 
 	attributeDesc[2].offset = offsetof(Vertex, texCoord);
+
+	// location 3 & 4 reserved for instance Position
+
+	// adding more attributes for binormals
+	attributeDesc[3].binding = 0;
+	attributeDesc[3].location = 5;
+	attributeDesc[3].format = VK_FORMAT_R32G32B32_SFLOAT;
+	attributeDesc[3].offset = offsetof(Vertex, tangent);
+
+	attributeDesc[4].binding = 0;
+	attributeDesc[4].location = 6;
+	attributeDesc[4].format = VK_FORMAT_R32G32B32_SFLOAT;
+	attributeDesc[4].offset = offsetof(Vertex, bitangent);
 
 	return attributeDesc;
 }

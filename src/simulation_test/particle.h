@@ -22,7 +22,7 @@ struct Vertex
 	static VkVertexInputBindingDescription getBindingDescription();
 
 	// get attribute descriptions...
-	static std::array<VkVertexInputAttributeDescription, 3> getAttributeDescription();
+	static std::array<VkVertexInputAttributeDescription, 5> getAttributeDescription();
 };
 
 struct particle

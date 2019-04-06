@@ -7,6 +7,11 @@ layout(location = 2) in vec2 inTexCoord;
 
 layout(location = 3) in vec4 instancePos;
 
+// binormals
+layout(location = 4) in vec3 inTangent;
+layout(location = 5) in vec3 inBiTang;
+
+
 layout(location = 0) out vec3 position;
 layout(location = 1) out vec3 normal;
 layout(location = 2) out vec2 fragTexCoord;
@@ -43,26 +48,17 @@ void main()
 	gl_Position = (ubo.proj * ubo.view * model) * vec4(inPos, 1.0);
 	
     position = vec3(model * vec4(inPos, 1.0));
-	normal = mat3(ubo.model) * inNormal;  // rotation matrix for transNormal
-	normal = normalize(normal);
+	normal = normalize(mat3(ubo.model) * inNormal);  // rotation matrix for transNormal into cameraspace
 	
-	// calculate tangent and binormal
-	vec3 c1 = cross(inNormal, vec3(0, 0, 1));
-	vec3 c2 = cross(inNormal, vec3(0, 1, 0));
-	
-	vec3 calcTang = vec3(0);
-	vec3 calcBi = vec3(0);
-    
-	if (length(c1) > length(c2))
-		calcTang = normalize(c1);
-	else
-		calcTang = normalize(c2);
-    
-	calcBi = normalize(cross(inNormal, calcTang));
 
-	// transform tangent & binormal
-	tangent_out = mat3(ubo.model) * calcTang;
-	binormal_out = mat3(ubo.model) * calcBi;
+	// transform tangent & binormal to camera space
+	tangent_out = normalize((mat3(ubo.model) * inTangent));
+	//tangent_out = inTangent;
+
+	//vec3 calcBi = cross (normal, tangent_out);
+	//binormal_out = calcBi;
+
+	binormal_out = normalize((mat3(ubo.model) * inBiTang));
 	
 	fragTexCoord = inTexCoord;
 }
