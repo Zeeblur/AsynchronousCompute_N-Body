@@ -39,7 +39,7 @@ void main()
 	
 	vec3 transN = normalize(samp_norm + normal);  // in tangent space
 	
-//	transN = TBN * samp_norm; // in cam space
+	//transN = TBN * samp_norm; // in cam space
 
 
 	// calculate phong lighting
@@ -56,7 +56,6 @@ void main()
 	vec3 halfV = normalize(view_dir + light_dir);
 
 	float dotS = clamp(dot(halfV, transN), 0, 1);
-	//float kSpec = max(dotS, 0);
 
 	vec4 specular = specular_reflection * light_colour * pow(dotS, shininess);
 	
@@ -64,9 +63,9 @@ void main()
 
 	outColor = texture(texSampler, fragTexCoord);
 	outColor *= primary;
-//	outColor += specular;
+	//outColor += specular;
 
-	//outColor = vec4(, 1.0);
+//	outColor = vec4(, 1.0);
 
 	outColor.a = 1.0;
 }

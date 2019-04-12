@@ -223,7 +223,7 @@ void nbody::computeTangentBasis(std::vector<Vertex*> &triangleVertices, std::map
 			calcTangent *= -1.0f;
 		}
 		assert(!glm::isnan(calcTangent.x));
-		tangents[v].push_back(calcTangent);
+		tangents[v].push_back(tangent);
 		bitangents[v].push_back(bitangent);
 	}
 }
